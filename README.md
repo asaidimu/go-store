@@ -1,4 +1,3 @@
-```markdown
 # go-store
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/asaidimu/go-store.svg)](https://pkg.go.dev/github.com/asaidimu/go-store)
@@ -501,4 +500,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE.md) f
 
 *   This project utilizes the `github.com/google/btree` library for efficient B-tree implementations in its indexing.
 *   UUID generation is handled by `github.com/google/uuid`.
-```
