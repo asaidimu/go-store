@@ -2,13 +2,13 @@
 
 ## Environment Requirements
 
-Go runtime version 1.24.4 or higher. No specific compiler settings or platform constraints beyond standard Go development practices.
+Go Runtime Environment (Go 1.24.4+ recommended). No special compiler settings or platform constraints beyond standard Go compilation.
 
 ## Initialization Patterns
 
-### Basic Store Initialization and Closure
+### Basic Store Initialization and Cleanup
 
-The standard pattern for initializing a new store instance and ensuring its proper closure upon application exit.
+The most common way to initialize the store and ensure proper resource cleanup upon application shutdown.
 
 ```[DETECTED_LANGUAGE]
 package main
@@ -19,37 +19,34 @@ import (
 )
 
 func main() {
-	// Create a new in-memory store instance
+	// Initialize a new store instance
 	s := store.NewStore()
-	// Defer the Close() call to ensure resources are released when main exits
+	// Defer the Close method call to ensure resources are released
+	// when the main function exits.
 	defer s.Close()
 
-	fmt.Println("Store is initialized and ready for operations.")
+	fmt.Println("Store initialized and ready for use.")
 
-	// Your application logic here, interacting with 's'
+	// ... perform store operations here ...
 }
-
 ```
 
 ## Common Integration Pitfalls
 
-- **Issue**: Operations on a closed store
-  - **Solution**: Once `s.Close()` is called, the store cannot be reused. Ensure `Close()` is called only when the store is no longer needed, typically at application shutdown.
+- **Issue**: Forgetting to call `store.Close()`
+  - **Solution**: Always use `defer s.Close()` immediately after `s := store.NewStore()` to ensure resources are released and to aid garbage collection, especially in long-running applications.
 
-- **Issue**: Data loss on application exit
-  - **Solution**: `go-store` is an in-memory database and does not persist data to disk. For persistence, implement an external serialization/deserialization layer or use it as a caching mechanism.
+- **Issue**: Modifying `DocumentResult.Data` directly affects the stored document.
+  - **Solution**: `DocumentResult.Data` is a deep copy. Modifying it will NOT affect the internal state of the document in the store. To update a document, you must call `s.Update(id, newDocumentData)`.
 
-- **Issue**: Attempting to create an index that already exists
-  - **Solution**: The `CreateIndex` method will return `ErrIndexExists` if an index with the same name already exists. Handle this error or `DropIndex` the existing index first if redefinition is intended.
-
-- **Issue**: Not handling errors from API calls
-  - **Solution**: All operations that can fail return an `error`. Always check the error return value and handle specific `go-store` errors (e.g., `ErrDocumentNotFound`, `ErrIndexNotFound`) appropriately.
+- **Issue**: Expecting data persistence across application restarts.
+  - **Solution**: `go-store` is an in-memory database. All data is lost when the application exits. For persistence, you need to implement external serialization/deserialization or use a persistent storage layer.
 
 ## Lifecycle Dependencies
 
-`go-store`'s components are managed by the `Store` instance. `NewStore()` must be called first to initialize the core data structures and internal mechanisms. All operations (Insert, Update, Delete, Get, CreateIndex, DropIndex, Lookup, Stream) require an active `Store` instance. `Close()` should be called as the final step in the store's lifecycle to release resources and prevent memory leaks, making the `Store` instance unusable afterwards. There are no explicit initialization dependencies on external application frameworks, just the Go runtime.
+The `Store` instance should be initialized once at the application's startup phase (e.g., in `main` or a dedicated initialization function). Its `Close()` method should be called during the application's graceful shutdown procedure to release all allocated memory and resources. Operations performed on a `closed` store will result in `ErrStoreClosed`.
 
 
 
 ---
-*Generated using Gemini AI on 7/9/2025, 11:33:48 PM. Review and refine as needed.*
+*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*

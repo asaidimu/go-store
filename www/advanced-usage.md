@@ -1,3 +1,12 @@
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Advanced Usage"
+description: "Advanced Usage documentation and guidance"
+---
 # Advanced Usage
 
 ## Advanced Usage
@@ -153,5 +162,3 @@ func main() {
 }
 ```
 
----
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*

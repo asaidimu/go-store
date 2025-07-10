@@ -22,4 +22,8 @@ go.work
 *~
 *.log
 .readme.md
-.gitignore
+www/.vitepress/dist
+www/.vitepress/cache
+node_modules
+.commit-message.md
+.readme.md

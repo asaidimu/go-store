@@ -1,6 +1,12 @@
-# Getting Started
-
-## Getting Started
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Getting Started"
+description: "Getting Started documentation and guidance"
+---
 
 This section will guide you through setting up `go-store` and performing your first tasks.
 
@@ -29,18 +35,20 @@ import store "github.com/asaidimu/go-store"
 You can verify the installation and explore basic functionality by running the provided examples from the `go-store` repository:
 
 1.  **Clone the repository**:
-    ```bash
+
+```bash
 git clone https://github.com/asaidimu/go-store.git
 cd go-store
-    ```
+```
+
 2.  **Run examples**:
-    ```bash
+```bash
 go run examples/basic/main.go
 go run examples/intermediate/main.go
 go run examples/advanced/main.go
-    ```
+```
 
-### First Tasks: Basic Document Operations
+### Basic Document Operations
 
 The most common operations involve creating, reading, updating, and deleting documents. Documents are represented as a `store.Document` (which is a `map[string]any`).
 
@@ -112,5 +120,3 @@ func main() {
 
 This simple flow covers the essential operations for managing documents within `go-store`.
 
----
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*

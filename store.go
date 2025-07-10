@@ -512,31 +512,32 @@ func (s *Store) Get(docID string) (*DocumentResult, error) {
 // Stream returns a stream of all documents currently in the store.
 // The stream provides a consistent snapshot of documents at the time it was created.
 func (s *Store) Stream(bufferSize int) *DocumentStream {
-	ds := NewDocumentStream(bufferSize)
+    ds := NewDocumentStream(bufferSize)
 
-	if s.closed.Load() {
-		s.closeStreamWithError(ds, ErrStoreClosed)
-		return ds
-	}
+    if s.closed.Load() {
+        s.closeStreamWithError(ds, ErrStoreClosed)
+        return ds
+    }
 
-	go s.streamDocuments(ds)
-	return ds
+    // Capture snapshot immediately, not in the goroutine
+    var docHandles []*DocumentHandle
+    s.mu.RLock()
+    for _, docHandle := range s.documents {
+        if docHandle != nil && docHandle.id != "" {
+            docHandles = append(docHandles, docHandle)
+        }
+    }
+    s.mu.RUnlock()
+
+    // Start streaming with the captured snapshot
+    go s.streamDocuments(ds, docHandles)
+    return ds
 }
 
 // streamDocuments is a helper that runs the actual streaming logic in a goroutine.
-func (s *Store) streamDocuments(ds *DocumentStream) {
+func (s *Store) streamDocuments(ds *DocumentStream, docHandles []*DocumentHandle) {
 	defer close(ds.results)
 	defer close(ds.errors)
-
-	// Collect snapshot of document handles
-	var docHandles []*DocumentHandle
-	s.mu.RLock()
-	for _, docHandle := range s.documents {
-		if docHandle != nil && docHandle.id != "" {
-			docHandles = append(docHandles, docHandle)
-		}
-	}
-	s.mu.RUnlock()
 
 	// Stream documents
 	for _, docHandle := range docHandles {

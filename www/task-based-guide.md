@@ -1,6 +1,12 @@
-# Task-Based Guide
-
-## Task-Based Guide
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Task-Based Guide"
+description: "Task-Based Guide documentation and guidance"
+---
 
 This section focuses on common tasks you'll perform with `go-store` beyond basic CRUD operations.
 
@@ -135,5 +141,3 @@ for {
 *   **Cancellation**: The `DocumentStream` includes an internal `context.Context` which can be cancelled by calling `docStream.Close()`. This is crucial for stopping iteration early and releasing resources if you don't need to consume all documents.
 *   **Error Handling**: `Next()` will return `store.ErrStreamClosed` when all documents have been streamed or if the stream was explicitly closed. Other errors might indicate underlying issues (e.g., context cancellation).
 
----
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*

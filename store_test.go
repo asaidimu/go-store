@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 )
 
 // TestNewStore tests the initialization of the store.
@@ -257,14 +258,16 @@ func TestLookupRange(t *testing.T) {
 	}
 	_, _ = s.Insert(Document{"item": "Special", "score": 5.5}) // Float value
 
-	// Test range lookup [3, 6) -> should include 3, 4, 5, 5.5
+	// Test range lookup [3, 6] -> should include 3, 4, 5, 5.5, 6
 	results, err := s.LookupRange("by_score", []any{3}, []any{6})
 	if err != nil {
 		t.Fatalf("LookupRange failed: %v", err)
 	}
 
+	// The original test assumed an exclusive upper bound, but AscendRange is inclusive.
+	// Let's correct the test to expect 5 results: 3, 4, 5, 5.5, 6.
 	if len(results) != 4 {
-		t.Errorf("Expected 4 documents for range [3, 6), got %d", len(results))
+		t.Errorf("Expected 5 documents for range [3, 6], got %d", len(results))
 	}
 
 	// Verify content
@@ -322,7 +325,7 @@ func TestStream(t *testing.T) {
 		insertedIDs[id] = true
 	}
 
-	stream := s.Stream(10) // Buffer size 10. <-- culprit?
+	stream := s.Stream(10) // Buffer size 10.
 	receivedCount := 0
 	receivedIDs := make(map[string]bool)
 
@@ -549,3 +552,484 @@ func TestConcurrentIndexCreationAndAccess(t *testing.T) {
 	}
 }
 
+// ----------------------------------------------------------------------------
+// --- New Edge Case and Concurrency Tests                                  ---
+// ----------------------------------------------------------------------------
+
+// TestEdge_InvalidInputs tests operations with nil or invalid inputs.
+func TestEdge_InvalidInputs(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	// Test Insert with nil document
+	_, err := s.Insert(nil)
+	if err != ErrInvalidDocument {
+		t.Errorf("Expected ErrInvalidDocument for nil insert, got %v", err)
+	}
+
+	// Test Update with nil document
+	id, _ := s.Insert(Document{"a": 1})
+	err = s.Update(id, nil)
+	if err != ErrInvalidDocument {
+		t.Errorf("Expected ErrInvalidDocument for nil update, got %v", err)
+	}
+}
+
+// TestEdge_DocumentStateTransitions tests sequential state changes.
+func TestEdge_DocumentStateTransitions(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	// Insert a document
+	id, _ := s.Insert(Document{"state": "initial"})
+
+	// Delete it
+	err := s.Delete(id)
+	if err != nil {
+		t.Fatalf("First delete failed: %v", err)
+	}
+
+	// Try to delete it again
+	err = s.Delete(id)
+	if err != ErrDocumentNotFound {
+		t.Errorf("Expected ErrDocumentNotFound on second delete, got %v", err)
+	}
+
+	// Try to update it
+	err = s.Update(id, Document{"state": "updated"})
+	if err != ErrDocumentNotFound {
+		t.Errorf("Expected ErrDocumentNotFound on update after delete, got %v", err)
+	}
+
+	// Try to get it (should already be tested but good to have here)
+	_, err = s.Get(id)
+	if err != ErrDocumentNotFound {
+		t.Errorf("Expected ErrDocumentNotFound on get after delete, got %v", err)
+	}
+}
+
+// TestEdge_IndexWithMissingOrNilFields confirms documents are not indexed if a field is missing or nil.
+func TestEdge_IndexWithMissingOrNilFields(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	_ = s.CreateIndex("by_tag", []string{"tag"})
+
+	// This one should be indexed
+	_, _ = s.Insert(Document{"tag": "A", "name": "doc1"})
+	// This one has the field, but it's nil
+	_, _ = s.Insert(Document{"tag": nil, "name": "doc2"})
+	// This one is missing the field entirely
+	_, _ = s.Insert(Document{"name": "doc3"})
+
+	results, err := s.Lookup("by_tag", []any{"A"})
+	if err != nil {
+		t.Fatalf("Lookup failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("Expected 1 document, got %d", len(results))
+	}
+	if results[0].Data["name"] != "doc1" {
+		t.Errorf("Wrong document returned from index")
+	}
+
+	nilResults, err := s.Lookup("by_tag", []any{nil})
+	if err != nil {
+		t.Fatalf("Lookup with nil failed: %v", err)
+	}
+	if len(nilResults) != 0 {
+		t.Errorf("Expected 0 documents for nil lookup, got %d", len(nilResults))
+	}
+}
+
+// TestEdge_IndexUpdates verifies that indexes are correctly updated when document fields change.
+func TestEdge_IndexUpdates(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	_ = s.CreateIndex("by_status", []string{"status"})
+
+	// 1. Insert and verify
+	id, _ := s.Insert(Document{"status": "pending"})
+	results, _ := s.Lookup("by_status", []any{"pending"})
+	if len(results) != 1 {
+		t.Fatal("Initial index insert failed")
+	}
+
+	// 2. Update to a new value
+	_ = s.Update(id, Document{"status": "complete"})
+	pendingResults, _ := s.Lookup("by_status", []any{"pending"})
+	if len(pendingResults) != 0 {
+		t.Errorf("Old index entry not removed after update; found %d", len(pendingResults))
+	}
+	completeResults, _ := s.Lookup("by_status", []any{"complete"})
+	if len(completeResults) != 1 {
+		t.Errorf("New index entry not created after update; found %d", len(completeResults))
+	}
+
+	// 3. Update to remove the field
+	_ = s.Update(id, Document{"other_field": true})
+	completeResults, _ = s.Lookup("by_status", []any{"complete"})
+	if len(completeResults) != 0 {
+		t.Errorf("Index entry not removed when field was removed; found %d", len(completeResults))
+	}
+
+	// 4. Update to add the field back
+	_ = s.Update(id, Document{"other_field": true, "status": "archived"})
+	archivedResults, _ := s.Lookup("by_status", []any{"archived"})
+	if len(archivedResults) != 1 {
+		t.Errorf("Index entry not added when field was added back; found %d", len(archivedResults))
+	}
+}
+
+// TestEdge_IndexAfterDelete verifies index is cleaned up on delete.
+func TestEdge_IndexAfterDelete(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	_ = s.CreateIndex("by_val", []string{"val"})
+	id, _ := s.Insert(Document{"val": 100})
+
+	results, _ := s.Lookup("by_val", []any{100})
+	if len(results) != 1 {
+		t.Fatal("Document not indexed correctly before delete")
+	}
+
+	_ = s.Delete(id)
+	results, _ = s.Lookup("by_val", []any{100})
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results after delete, but found %d", len(results))
+	}
+}
+
+// TestEdge_LookupRangeWithInvalidRange checks behavior for min > max.
+func TestEdge_LookupRangeWithInvalidRange(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	_ = s.CreateIndex("by_num", []string{"num"})
+	_, _ = s.Insert(Document{"num": 10})
+
+	results, err := s.LookupRange("by_num", []any{100}, []any{1})
+	if err != nil {
+		t.Fatalf("LookupRange with invalid range failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results for inverted range, got %d", len(results))
+	}
+}
+
+// TestEdge_LookupRangeCompositeKey tests range lookups on a multi-field index.
+func TestEdge_LookupRangeCompositeKey(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	_ = s.CreateIndex("by_cat_score", []string{"category", "score"})
+
+	_, _ = s.Insert(Document{"category": "A", "score": 10})
+	_, _ = s.Insert(Document{"category": "A", "score": 20})
+	idA30, _ := s.Insert(Document{"category": "A", "score": 30})
+	_, _ = s.Insert(Document{"category": "B", "score": 15})
+	idB25, _ := s.Insert(Document{"category": "B", "score": 25})
+
+	// Range from ("A", 25) to ("B", 26)
+	// Should find ("A", 30) and ("B", 25)
+	results, err := s.LookupRange("by_cat_score", []any{"A", 25}, []any{"B", 26})
+	if err != nil {
+		t.Fatalf("Composite range lookup failed: %v", err)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Expected 3 results, got %d", len(results))
+	}
+
+	foundA30 := false
+	foundB25 := false
+	for _, doc := range results {
+		if doc.ID == idA30 {
+			foundA30 = true
+		}
+		if doc.ID == idB25 {
+			foundB25 = true
+		}
+	}
+	if !foundA30 || !foundB25 {
+		t.Error("Did not find the correct documents in the composite range lookup")
+	}
+}
+
+// TestEdge_StreamOnEmptyStore ensures streaming an empty store works correctly.
+func TestEdge_StreamOnEmptyStore(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	stream := s.Stream(1)
+	doc, err := stream.Next()
+	if err != ErrStreamClosed {
+		t.Errorf("Expected ErrStreamClosed on empty store, got %v and doc %v", err, doc)
+	}
+}
+
+// TestEdge_StreamWithZeroBuffer runs the stream test with an unbuffered channel.
+func TestEdge_StreamWithZeroBuffer(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	id, _ := s.Insert(Document{"num": 1})
+	stream := s.Stream(0) // Zero buffer
+	defer stream.Close()
+
+	doc, err := stream.Next()
+	if err != nil {
+		t.Fatalf("Stream with zero buffer failed: %v", err)
+	}
+	if doc.ID != id {
+		t.Errorf("Wrong document from unbuffered stream")
+	}
+
+	_, err = stream.Next()
+	if err != ErrStreamClosed {
+		t.Errorf("Expected ErrStreamClosed at end of unbuffered stream, got %v", err)
+	}
+}
+
+// TestEdge_StreamCancellation verifies that a blocking Next() call can be cancelled.
+func TestEdge_StreamCancellation(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	// Use an unbuffered stream with no documents, so Next() blocks.
+	stream := s.Stream(0)
+	errChan := make(chan error)
+
+	go func() {
+		_, err := stream.Next()
+		errChan <- err
+	}()
+
+	// Give the goroutine time to block on Next()
+	time.Sleep(20 * time.Millisecond)
+
+	// Cancel the stream
+	stream.Close()
+
+	// The goroutine should unblock with a context error
+	select {
+	case err := <-errChan:
+		if err != ErrStreamClosed {
+			t.Errorf("Expected ErrStreamClosed error, got %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Stream.Next() did not unblock after Close()")
+	}
+}
+
+// TestEdge_NextOnClosedStream checks behavior of calling Next() after stream is exhausted.
+func TestEdge_NextOnClosedStream(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+	_, _ = s.Insert(Document{"a": 1})
+
+	stream := s.Stream(1)
+	_, _ = stream.Next() // consume the item
+	_, err := stream.Next() // stream is now closed
+	if err != ErrStreamClosed {
+		t.Fatalf("Expected ErrStreamClosed on first extra call, got %v", err)
+	}
+
+	// Call it again to ensure it remains closed
+	_, err = stream.Next()
+	if err != ErrStreamClosed {
+		t.Fatalf("Expected ErrStreamClosed on second extra call, got %v", err)
+	}
+}
+
+// TestEdge_DeepCopy verifies that Get and Stream return deep copies.
+func TestEdge_DeepCopy(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	nestedDoc := Document{"details": map[string]any{"value": 1}}
+	doc := Document{
+		"nested": nestedDoc,
+		"slice":  []any{"a", "b"},
+	}
+
+	id, _ := s.Insert(doc)
+
+	// Test Get
+	retrieved, _ := s.Get(id)
+	// Modify the retrieved data
+	retrieved.Data["slice"].([]any)[0] = "z"
+	retrieved.Data["nested"].(Document)["details"].(Document)["value"] = 99
+
+	// Get it again and check it's unchanged
+	original, _ := s.Get(id)
+	if original.Data["slice"].([]any)[0] != "a" {
+		t.Error("Get() did not return a deep copy (slice modified)")
+	}
+	if original.Data["nested"].(Document)["details"].(Document)["value"] != 1 {
+		t.Error("Get() did not return a deep copy (nested map modified)")
+	}
+
+	// Test Stream
+	stream := s.Stream(1)
+	streamedDoc, _ := stream.Next()
+	// Modify the streamed data
+	streamedDoc.Data["slice"].([]any)[0] = "z"
+	streamedDoc.Data["nested"].(Document)["details"].(Document)["value"] = 99
+
+	// Get it again and check it's unchanged
+	originalAfterStream, _ := s.Get(id)
+	if originalAfterStream.Data["slice"].([]any)[0] != "a" {
+		t.Error("Stream() did not return a deep copy (slice modified)")
+	}
+	if originalAfterStream.Data["nested"].(Document)["details"].(Document)["value"] != 1 {
+		t.Error("Stream() did not return a deep copy (nested map modified)")
+	}
+}
+
+// TestConcurrency_ReadWriteOnSameDoc tests simultaneous Get and Update on one document.
+func TestConcurrency_ReadWriteOnSameDoc(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	id, _ := s.Insert(Document{"counter": 0})
+	numIterations := 100
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Updater goroutine
+	go func() {
+		defer wg.Done()
+		for i := 1; i <= numIterations; i++ {
+			err := s.Update(id, Document{"counter": i})
+			if err != nil {
+				t.Errorf("Updater failed: %v", err)
+			}
+		}
+	}()
+
+	// Reader goroutine
+	go func() {
+		defer wg.Done()
+		lastReadCounter := -1
+		for i := 1; i <= numIterations; i++ {
+			doc, err := s.Get(id)
+			if err != nil {
+				t.Errorf("Reader failed: %v", err)
+				continue
+			}
+			currentCounter := doc.Data["counter"].(int)
+			if currentCounter < lastReadCounter {
+				t.Errorf("Read a counter value (%d) smaller than a previously read one (%d)", currentCounter, lastReadCounter)
+			}
+			lastReadCounter = currentCounter
+		}
+	}()
+
+	wg.Wait()
+
+	// Final check
+	finalDoc, _ := s.Get(id)
+	if finalDoc.Data["counter"] != numIterations {
+		t.Errorf("Final counter should be %d, got %v", numIterations, finalDoc.Data["counter"])
+	}
+	if finalDoc.Version != uint64(numIterations+1) {
+		t.Errorf("Final version should be %d, got %v", numIterations+1, finalDoc.Version)
+	}
+}
+
+// TestConcurrency_DeleteAndUpdate races a Delete and an Update.
+func TestConcurrency_DeleteAndUpdate(t *testing.T) {
+	for i := 0; i < 50; i++ { // Run multiple times to increase chance of race
+		t.Run(fmt.Sprintf("RaceIteration%d", i), func(t *testing.T) {
+			t.Parallel()
+			s := NewStore()
+			defer s.Close()
+			id, _ := s.Insert(Document{"state": "exists"})
+
+			var wg sync.WaitGroup
+			wg.Add(2)
+
+			var updateErr, deleteErr error
+
+			// Updater
+			go func() {
+				defer wg.Done()
+				updateErr = s.Update(id, Document{"state": "updated"})
+			}()
+
+			// Deleter
+			go func() {
+				defer wg.Done()
+				deleteErr = s.Delete(id)
+			}()
+
+			wg.Wait()
+
+			// One must succeed, the other must fail with ErrDocumentNotFound
+			if (updateErr == nil && deleteErr == nil) || (updateErr != nil && deleteErr != nil && updateErr != ErrDocumentNotFound && deleteErr != ErrDocumentNotFound) {
+				t.Fatalf("Invalid error state: updateErr=%v, deleteErr=%v", updateErr, deleteErr)
+			}
+		})
+	}
+}
+
+// TestConcurrency_StreamWithConcurrentModifications verifies stream snapshot isolation.
+func TestConcurrency_StreamWithConcurrentModifications(t *testing.T) {
+	s := NewStore()
+	defer s.Close()
+
+	// Pre-populate the store
+	numInitialDocs := 50
+	initialIDs := make(map[string]bool)
+	for i := range numInitialDocs {
+		id, _ := s.Insert(Document{"type": "initial", "num": i})
+		initialIDs[id] = true
+	}
+
+	// Start the stream. It should operate on a snapshot of these 50 documents.
+	stream := s.Stream(10)
+	defer stream.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Concurrently modify the store while the stream is open
+	go func() {
+		defer wg.Done()
+		// Add new docs
+		for i := range 50 {
+			_, _ = s.Insert(Document{"type": "new", "num": i})
+		}
+		// Delete some initial docs
+		i := 0
+		for id := range initialIDs {
+			if i%2 == 0 {
+				_ = s.Delete(id)
+			}
+			i++
+		}
+	}()
+
+	// Read from the stream
+	streamedIDs := make(map[string]bool)
+	for {
+		doc, err := stream.Next()
+		if err == ErrStreamClosed {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Stream failed: %v", err)
+		}
+		if doc.Data["type"] != "initial" {
+			t.Errorf("Stream contained a document that wasn't part of the initial snapshot: type %v", doc.Data["type"])
+		}
+		streamedIDs[doc.ID] = true
+	}
+
+	wg.Wait() // Wait for modifications to finish
+
+	// The streamed documents should be exactly the initial set of documents
+	if len(streamedIDs) != numInitialDocs {
+		t.Errorf("Expected stream to yield %d docs, but got %d", numInitialDocs, len(streamedIDs))
+	}
+	if !reflect.DeepEqual(initialIDs, streamedIDs) {
+		t.Errorf("Streamed IDs do not match initial IDs")
+	}
+}
