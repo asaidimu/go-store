@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/asaidimu/go-store/compare/v2.0.0...v2.0.1) (2025-07-13)
+
+
+### Bug Fixes
+
+* **mod:** ensure v2 module is indexed by Go proxy ([c3f183d](https://github.com/asaidimu/go-store/commit/c3f183d1d467ace98da2c3089c17000aba0719da))
+
 # [2.0.0](https://github.com/asaidimu/go-store/compare/v1.0.0...v2.0.0) (2025-07-13)
 
 
