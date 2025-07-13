@@ -4,12 +4,6 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     [
-      "@semantic-release/exec",
-      {
-        "prepareCmd": "current_major=${lastRelease.version%%.*}; next_major=${nextRelease.version%%.*}; if [ \"$current_major\" != \"$next_major\" ]; then ./bin/bump.sh \"$current_major\" \"$next_major\"; else echo 'Major versions are the same, skipping bump.sh'; fi"
-      }
-    ],
-    [
       "@semantic-release/changelog",
       {
         "changelogFile": "CHANGELOG.md"
