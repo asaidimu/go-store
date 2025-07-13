@@ -29,7 +29,7 @@ func TestClose(t *testing.T) {
 	s := NewStore()
 	s.Close()
 
-	_, err := s.Insert(Document{"test": "data"})
+	_, err := s.Insert(map[string]any{"test": "data"})
 	if err != ErrStoreClosed {
 		t.Errorf("Expected ErrStoreClosed, got %v", err)
 	}
@@ -40,7 +40,7 @@ func TestInsert(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	doc := Document{"name": "Test Doc", "value": 123}
+	doc := map[string]any{"name": "Test Doc", "value": 123}
 	id, err := s.Insert(doc)
 
 	if err != nil {
@@ -70,7 +70,7 @@ func TestGet(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	doc := Document{"key": "value"}
+	doc := map[string]any{"key": "value"}
 	id, _ := s.Insert(doc)
 
 	// Test existing document
@@ -94,10 +94,10 @@ func TestUpdate(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	originalDoc := Document{"name": "Old Name", "age": 20}
+	originalDoc := map[string]any{"name": "Old Name", "age": 20}
 	id, _ := s.Insert(originalDoc)
 
-	updatedDocData := Document{"name": "New Name", "age": 25, "city": "NYC"}
+	updatedDocData := map[string]any{"name": "New Name", "age": 25, "city": "NYC"}
 	err := s.Update(id, updatedDocData)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
@@ -115,7 +115,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// Test updating non-existent document
-	err = s.Update("non_existent_id", Document{"a": 1})
+	err = s.Update("non_existent_id", map[string]any{"a": 1})
 	if err != ErrDocumentNotFound {
 		t.Errorf("Expected ErrDocumentNotFound for non-existent update, got %v", err)
 	}
@@ -126,7 +126,7 @@ func TestDelete(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	doc := Document{"data": "to be deleted"}
+	doc := map[string]any{"data": "to be deleted"}
 	id, _ := s.Insert(doc)
 
 	err := s.Delete(id)
@@ -184,10 +184,10 @@ func TestLookup(t *testing.T) {
 	_ = s.CreateIndex("by_user_country", []string{"user", "country"})
 
 	// Insert documents for indexing
-	_, _ = s.Insert(Document{"user": "Alice", "country": "USA", "age": 30})
-	_, _ = s.Insert(Document{"user": "Bob", "country": "Canada", "age": 25})
-	_, _ = s.Insert(Document{"user": "Charlie", "country": "USA", "age": 35})
-	_, _ = s.Insert(Document{"user": "Alice", "country": "UK", "age": 28}) // Another Alice
+	_, _ = s.Insert(map[string]any{"user": "Alice", "country": "USA", "age": 30})
+	_, _ = s.Insert(map[string]any{"user": "Bob", "country": "Canada", "age": 25})
+	_, _ = s.Insert(map[string]any{"user": "Charlie", "country": "USA", "age": 35})
+	_, _ = s.Insert(map[string]any{"user": "Alice", "country": "UK", "age": 28}) // Another Alice
 
 	// Test exact lookup on single field
 	usaDocs, err := s.Lookup("by_country", []any{"USA"})
@@ -254,9 +254,9 @@ func TestLookupRange(t *testing.T) {
 
 	// Insert documents with numerical values
 	for i := 1; i <= 10; i++ {
-		_, _ = s.Insert(Document{"item": fmt.Sprintf("Item%d", i), "score": i})
+		_, _ = s.Insert(map[string]any{"item": fmt.Sprintf("Item%d", i), "score": i})
 	}
-	_, _ = s.Insert(Document{"item": "Special", "score": 5.5}) // Float value
+	_, _ = s.Insert(map[string]any{"item": "Special", "score": 5.5}) // Float value
 
 	// Test range lookup [3, 6] -> should include 3, 4, 5, 5.5, 6
 	results, err := s.LookupRange("by_score", []any{3}, []any{6})
@@ -321,7 +321,7 @@ func TestStream(t *testing.T) {
 	numDocs := 100
 	insertedIDs := make(map[string]bool)
 	for i := 0; i < numDocs; i++ {
-		id, _ := s.Insert(Document{"num": i, "data": fmt.Sprintf("Doc %d", i)})
+		id, _ := s.Insert(map[string]any{"num": i, "data": fmt.Sprintf("Doc %d", i)})
 		insertedIDs[id] = true
 	}
 
@@ -371,7 +371,7 @@ func TestConcurrentInserts(t *testing.T) {
 		go func(gID int) {
 			defer wg.Done()
 			for i := 0; i < numInsertsPerGoroutine; i++ {
-				doc := Document{"goroutine": gID, "index": i}
+				doc := map[string]any{"goroutine": gID, "index": i}
 				id, err := s.Insert(doc)
 				if err != nil {
 					t.Errorf("Concurrent insert failed for G%d-I%d: %v", gID, i, err)
@@ -406,7 +406,7 @@ func TestConcurrentUpdatesAndDeletes(t *testing.T) {
 	numDocs := 100
 	ids := make([]string, numDocs)
 	for i := 0; i < numDocs; i++ {
-		id, _ := s.Insert(Document{"counter": 0, "state": "active"})
+		id, _ := s.Insert(map[string]any{"counter": 0, "state": "active"})
 		ids[i] = id
 	}
 
@@ -423,7 +423,7 @@ func TestConcurrentUpdatesAndDeletes(t *testing.T) {
 
 				// Perform some updates
 				for j := 0; j < 5; j++ {
-					err := s.Update(docID, Document{"counter": j + 1, "state": "updated"})
+					err := s.Update(docID, map[string]any{"counter": j + 1, "state": "updated"})
 					// It's possible another goroutine deleted it, so ErrDocumentNotFound is ok
 					if err != nil && err != ErrDocumentNotFound {
 						t.Errorf("G%d: Concurrent update failed for doc %s: %v", gID, docID, err)
@@ -498,7 +498,7 @@ func TestConcurrentIndexCreationAndAccess(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < numWrites; i++ {
-			_, err := s.Insert(Document{"id": fmt.Sprintf("doc_%d", i), "category": "B"})
+			_, err := s.Insert(map[string]any{"id": fmt.Sprintf("doc_%d", i), "category": "B"})
 			if err != nil {
 				t.Errorf("Concurrent insert failed: %v", err)
 			}
@@ -511,7 +511,7 @@ func TestConcurrentIndexCreationAndAccess(t *testing.T) {
 		defer wg.Done()
 		// Insert some docs before creating the index to test population
 		for i := 0; i < numInitialDocs; i++ {
-			_, _ = s.Insert(Document{"id": fmt.Sprintf("initial_%d", i), "category": "A"})
+			_, _ = s.Insert(map[string]any{"id": fmt.Sprintf("initial_%d", i), "category": "A"})
 		}
 		err := s.CreateIndex("by_category", []string{"category"})
 		if err != nil {
@@ -568,7 +568,7 @@ func TestEdge_InvalidInputs(t *testing.T) {
 	}
 
 	// Test Update with nil document
-	id, _ := s.Insert(Document{"a": 1})
+	id, _ := s.Insert(map[string]any{"a": 1})
 	err = s.Update(id, nil)
 	if err != ErrInvalidDocument {
 		t.Errorf("Expected ErrInvalidDocument for nil update, got %v", err)
@@ -581,7 +581,7 @@ func TestEdge_DocumentStateTransitions(t *testing.T) {
 	defer s.Close()
 
 	// Insert a document
-	id, _ := s.Insert(Document{"state": "initial"})
+	id, _ := s.Insert(map[string]any{"state": "initial"})
 
 	// Delete it
 	err := s.Delete(id)
@@ -596,7 +596,7 @@ func TestEdge_DocumentStateTransitions(t *testing.T) {
 	}
 
 	// Try to update it
-	err = s.Update(id, Document{"state": "updated"})
+	err = s.Update(id, map[string]any{"state": "updated"})
 	if err != ErrDocumentNotFound {
 		t.Errorf("Expected ErrDocumentNotFound on update after delete, got %v", err)
 	}
@@ -615,11 +615,11 @@ func TestEdge_IndexWithMissingOrNilFields(t *testing.T) {
 	_ = s.CreateIndex("by_tag", []string{"tag"})
 
 	// This one should be indexed
-	_, _ = s.Insert(Document{"tag": "A", "name": "doc1"})
+	_, _ = s.Insert(map[string]any{"tag": "A", "name": "doc1"})
 	// This one has the field, but it's nil
-	_, _ = s.Insert(Document{"tag": nil, "name": "doc2"})
+	_, _ = s.Insert(map[string]any{"tag": nil, "name": "doc2"})
 	// This one is missing the field entirely
-	_, _ = s.Insert(Document{"name": "doc3"})
+	_, _ = s.Insert(map[string]any{"name": "doc3"})
 
 	results, err := s.Lookup("by_tag", []any{"A"})
 	if err != nil {
@@ -648,14 +648,14 @@ func TestEdge_IndexUpdates(t *testing.T) {
 	_ = s.CreateIndex("by_status", []string{"status"})
 
 	// 1. Insert and verify
-	id, _ := s.Insert(Document{"status": "pending"})
+	id, _ := s.Insert(map[string]any{"status": "pending"})
 	results, _ := s.Lookup("by_status", []any{"pending"})
 	if len(results) != 1 {
 		t.Fatal("Initial index insert failed")
 	}
 
 	// 2. Update to a new value
-	_ = s.Update(id, Document{"status": "complete"})
+	_ = s.Update(id, map[string]any{"status": "complete"})
 	pendingResults, _ := s.Lookup("by_status", []any{"pending"})
 	if len(pendingResults) != 0 {
 		t.Errorf("Old index entry not removed after update; found %d", len(pendingResults))
@@ -666,14 +666,14 @@ func TestEdge_IndexUpdates(t *testing.T) {
 	}
 
 	// 3. Update to remove the field
-	_ = s.Update(id, Document{"other_field": true})
+	_ = s.Update(id, map[string]any{"other_field": true})
 	completeResults, _ = s.Lookup("by_status", []any{"complete"})
 	if len(completeResults) != 0 {
 		t.Errorf("Index entry not removed when field was removed; found %d", len(completeResults))
 	}
 
 	// 4. Update to add the field back
-	_ = s.Update(id, Document{"other_field": true, "status": "archived"})
+	_ = s.Update(id, map[string]any{"other_field": true, "status": "archived"})
 	archivedResults, _ := s.Lookup("by_status", []any{"archived"})
 	if len(archivedResults) != 1 {
 		t.Errorf("Index entry not added when field was added back; found %d", len(archivedResults))
@@ -685,7 +685,7 @@ func TestEdge_IndexAfterDelete(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 	_ = s.CreateIndex("by_val", []string{"val"})
-	id, _ := s.Insert(Document{"val": 100})
+	id, _ := s.Insert(map[string]any{"val": 100})
 
 	results, _ := s.Lookup("by_val", []any{100})
 	if len(results) != 1 {
@@ -704,7 +704,7 @@ func TestEdge_LookupRangeWithInvalidRange(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 	_ = s.CreateIndex("by_num", []string{"num"})
-	_, _ = s.Insert(Document{"num": 10})
+	_, _ = s.Insert(map[string]any{"num": 10})
 
 	results, err := s.LookupRange("by_num", []any{100}, []any{1})
 	if err != nil {
@@ -721,11 +721,11 @@ func TestEdge_LookupRangeCompositeKey(t *testing.T) {
 	defer s.Close()
 	_ = s.CreateIndex("by_cat_score", []string{"category", "score"})
 
-	_, _ = s.Insert(Document{"category": "A", "score": 10})
-	_, _ = s.Insert(Document{"category": "A", "score": 20})
-	idA30, _ := s.Insert(Document{"category": "A", "score": 30})
-	_, _ = s.Insert(Document{"category": "B", "score": 15})
-	idB25, _ := s.Insert(Document{"category": "B", "score": 25})
+	_, _ = s.Insert(map[string]any{"category": "A", "score": 10})
+	_, _ = s.Insert(map[string]any{"category": "A", "score": 20})
+	idA30, _ := s.Insert(map[string]any{"category": "A", "score": 30})
+	_, _ = s.Insert(map[string]any{"category": "B", "score": 15})
+	idB25, _ := s.Insert(map[string]any{"category": "B", "score": 25})
 
 	// Range from ("A", 25) to ("B", 26)
 	// Should find ("A", 30) and ("B", 25)
@@ -769,7 +769,7 @@ func TestEdge_StreamWithZeroBuffer(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	id, _ := s.Insert(Document{"num": 1})
+	id, _ := s.Insert(map[string]any{"num": 1})
 	stream := s.Stream(0) // Zero buffer
 	defer stream.Close()
 
@@ -822,7 +822,7 @@ func TestEdge_StreamCancellation(t *testing.T) {
 func TestEdge_NextOnClosedStream(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
-	_, _ = s.Insert(Document{"a": 1})
+	_, _ = s.Insert(map[string]any{"a": 1})
 
 	stream := s.Stream(1)
 	_, _ = stream.Next() // consume the item
@@ -843,8 +843,8 @@ func TestEdge_DeepCopy(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	nestedDoc := Document{"details": map[string]any{"value": 1}}
-	doc := Document{
+	nestedDoc := map[string]any{"details": map[string]any{"value": 1}}
+	doc := map[string]any{
 		"nested": nestedDoc,
 		"slice":  []any{"a", "b"},
 	}
@@ -855,14 +855,14 @@ func TestEdge_DeepCopy(t *testing.T) {
 	retrieved, _ := s.Get(id)
 	// Modify the retrieved data
 	retrieved.Data["slice"].([]any)[0] = "z"
-	retrieved.Data["nested"].(Document)["details"].(Document)["value"] = 99
+	retrieved.Data["nested"].(map[string]any)["details"].(map[string]any)["value"] = 99
 
 	// Get it again and check it's unchanged
 	original, _ := s.Get(id)
 	if original.Data["slice"].([]any)[0] != "a" {
 		t.Error("Get() did not return a deep copy (slice modified)")
 	}
-	if original.Data["nested"].(Document)["details"].(Document)["value"] != 1 {
+	if original.Data["nested"].(map[string]any)["details"].(map[string]any)["value"] != 1 {
 		t.Error("Get() did not return a deep copy (nested map modified)")
 	}
 
@@ -871,14 +871,14 @@ func TestEdge_DeepCopy(t *testing.T) {
 	streamedDoc, _ := stream.Next()
 	// Modify the streamed data
 	streamedDoc.Data["slice"].([]any)[0] = "z"
-	streamedDoc.Data["nested"].(Document)["details"].(Document)["value"] = 99
+	streamedDoc.Data["nested"].(map[string]any)["details"].(map[string]any)["value"] = 99
 
 	// Get it again and check it's unchanged
 	originalAfterStream, _ := s.Get(id)
 	if originalAfterStream.Data["slice"].([]any)[0] != "a" {
 		t.Error("Stream() did not return a deep copy (slice modified)")
 	}
-	if originalAfterStream.Data["nested"].(Document)["details"].(Document)["value"] != 1 {
+	if originalAfterStream.Data["nested"].(map[string]any)["details"].(map[string]any)["value"] != 1 {
 		t.Error("Stream() did not return a deep copy (nested map modified)")
 	}
 }
@@ -888,7 +888,7 @@ func TestConcurrency_ReadWriteOnSameDoc(t *testing.T) {
 	s := NewStore()
 	defer s.Close()
 
-	id, _ := s.Insert(Document{"counter": 0})
+	id, _ := s.Insert(map[string]any{"counter": 0})
 	numIterations := 100
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -897,7 +897,7 @@ func TestConcurrency_ReadWriteOnSameDoc(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 1; i <= numIterations; i++ {
-			err := s.Update(id, Document{"counter": i})
+			err := s.Update(id, map[string]any{"counter": i})
 			if err != nil {
 				t.Errorf("Updater failed: %v", err)
 			}
@@ -941,7 +941,7 @@ func TestConcurrency_DeleteAndUpdate(t *testing.T) {
 			t.Parallel()
 			s := NewStore()
 			defer s.Close()
-			id, _ := s.Insert(Document{"state": "exists"})
+			id, _ := s.Insert(map[string]any{"state": "exists"})
 
 			var wg sync.WaitGroup
 			wg.Add(2)
@@ -951,7 +951,7 @@ func TestConcurrency_DeleteAndUpdate(t *testing.T) {
 			// Updater
 			go func() {
 				defer wg.Done()
-				updateErr = s.Update(id, Document{"state": "updated"})
+				updateErr = s.Update(id, map[string]any{"state": "updated"})
 			}()
 
 			// Deleter

@@ -13,7 +13,7 @@ func main() {
 	defer s.Close()
 
 	// 1. Insert Document
-	doc1 := store.Document{"title": "My First Document", "author": "Alice"}
+	doc1 := map[string]any{"title": "My First Document", "author": "Alice"}
 	id1, err := s.Insert(doc1)
 	if err != nil {
 		log.Fatalf("Basic: Failed to insert document: %v", err)
@@ -29,7 +29,7 @@ func main() {
 		retrievedDoc.ID, retrievedDoc.Data["title"], retrievedDoc.Version)
 
 	// 3. Update Document
-	updatedDoc1 := store.Document{"title": "My First Document (Revised)", "author": "Alice Smith", "pages": 150}
+	updatedDoc1 := map[string]any{"title": "My First Document (Revised)", "author": "Alice Smith", "pages": 150}
 	err = s.Update(id1, updatedDoc1)
 	if err != nil {
 		log.Fatalf("Basic: Failed to update document %s: %v", id1, err)

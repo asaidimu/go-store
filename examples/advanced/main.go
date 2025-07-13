@@ -15,7 +15,7 @@ func main() {
 	defer s.Close()
 
 	// Insert initial document
-	id1, _ := s.Insert(store.Document{"name": "Original", "value": 100})
+	id1, _ := s.Insert(map[string]any{"name": "Original", "value": 100})
 	fmt.Printf("Advanced: Initial document ID: %s\n", id1)
 
 	var wg sync.WaitGroup
@@ -23,12 +23,12 @@ func main() {
 
 	// 1. Concurrent Updates to a single document
 	fmt.Printf("\nAdvanced: Performing %d concurrent updates on document %s...\n", numConcurrentUpdates, id1)
-	for i := 0; i < numConcurrentUpdates; i++ {
+	for i := range numConcurrentUpdates {
 		wg.Add(1)
 		go func(iteration int) {
 			defer wg.Done()
 			newVal := 100 + iteration + 1
-			err := s.Update(id1, store.Document{"name": fmt.Sprintf("Updated %d", iteration+1), "value": newVal})
+			err := s.Update(id1, map[string]any{"name": fmt.Sprintf("Updated %d", iteration+1), "value": newVal})
 			if err != nil {
 				fmt.Printf("Advanced: Concurrent update %d failed: %v\n", iteration+1, err)
 			} else {
@@ -55,10 +55,10 @@ func main() {
 	// This part requires the CreateFunctionalIndex and Filter methods to be added to your store.go
 	// For demonstration, we'll assume they exist and run a small example.
 	fmt.Println("\nAdvanced: Demonstrating (theorized) Functional Index usage...")
-	s.Insert(store.Document{"product": "Laptop", "price": 1200, "in_stock": true})
-	s.Insert(store.Document{"product": "Mouse", "price": 25, "in_stock": true})
-	s.Insert(store.Document{"product": "Monitor", "price": 300, "in_stock": false})
-	s.Insert(store.Document{"product": "Keyboard", "price": 75, "in_stock": true})
+	s.Insert(map[string]any{"product": "Laptop", "price": 1200, "in_stock": true})
+	s.Insert(map[string]any{"product": "Mouse", "price": 25, "in_stock": true})
+	s.Insert(map[string]any{"product": "Monitor", "price": 300, "in_stock": false})
+	s.Insert(map[string]any{"product": "Keyboard", "price": 75, "in_stock": true})
 
 	time.Sleep(100 * time.Millisecond) // Allow updates to process
 

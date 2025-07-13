@@ -27,3 +27,4 @@ www/.vitepress/cache
 node_modules
 .commit-message.md
 .readme.md
+.commit-message.md

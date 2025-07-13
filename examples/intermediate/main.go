@@ -14,11 +14,11 @@ func main() {
 	defer s.Close()
 
 	// Insert several documents
-	s.Insert(store.Document{"name": "Alice", "age": 30, "city": "New York"})
-	s.Insert(store.Document{"name": "Bob", "age": 25, "city": "London"})
-	s.Insert(store.Document{"name": "Charlie", "age": 35, "city": "New York"})
-	s.Insert(store.Document{"name": "David", "age": 28, "city": "Paris"})
-	s.Insert(store.Document{"name": "Eve", "age": 30, "city": "New York"})
+	s.Insert(map[string]any{"name": "Alice", "age": 30, "city": "New York"})
+	s.Insert(map[string]any{"name": "Bob", "age": 25, "city": "London"})
+	s.Insert(map[string]any{"name": "Charlie", "age": 35, "city": "New York"})
+	s.Insert(map[string]any{"name": "David", "age": 28, "city": "Paris"})
+	s.Insert(map[string]any{"name": "Eve", "age": 30, "city": "New York"})
 
 	time.Sleep(100 * time.Millisecond) // Give async index updates time to process
 

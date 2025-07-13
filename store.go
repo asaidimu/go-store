@@ -24,13 +24,10 @@ var (
 	ErrInvalidDocument  = errors.New("invalid document")
 )
 
-// Document represents a document in the store as a map of field names to values.
-type Document map[string]any
-
 // DocumentSnapshot is an immutable, versioned snapshot of a document's data.
 // It uses reference counting to manage memory lifecycle safely across concurrent operations.
 type DocumentSnapshot struct {
-	data     Document // The actual document data
+	data     map[string]any // The actual document data
 	version  uint64   // Version number for optimistic concurrency control
 	refCount int64    // Reference count for memory management
 }
@@ -64,7 +61,7 @@ func (dh *DocumentHandle) read() *DocumentSnapshot {
 
 // write replaces the current snapshot with a new one and returns the previous snapshot.
 // The caller is responsible for releasing the returned snapshot.
-func (dh *DocumentHandle) write(data Document, version uint64) *DocumentSnapshot {
+func (dh *DocumentHandle) write(data map[string]any, version uint64) *DocumentSnapshot {
 	dh.mu.Lock()
 	defer dh.mu.Unlock()
 
@@ -230,7 +227,7 @@ func (fi *fieldIndex) addToIndex(docRef *DocumentHandle, keyValues []any) {
 
 // extractKeyValues extracts the values for indexed fields from a document.
 // Returns nil if any required field is missing or nil.
-func (fi *fieldIndex) extractKeyValues(data Document) []any {
+func (fi *fieldIndex) extractKeyValues(data map[string]any) []any {
 	values := make([]any, 0, len(fi.fields))
 
 	for _, field := range fi.fields {
@@ -285,7 +282,7 @@ func (fi *fieldIndex) lookupRange(minValues, maxValues []any) []*DocumentHandle 
 // DocumentResult holds the data and metadata for a document returned from a query.
 type DocumentResult struct {
 	ID      string   // Document identifier
-	Data    Document // Document data (deep copy)
+	Data    map[string]any // Document data (deep copy)
 	Version uint64   // Document version
 }
 
@@ -375,7 +372,7 @@ func NewStore() *Store {
 
 // Insert adds a new document to the store and updates all indexes.
 // Returns the generated document ID or an error.
-func (s *Store) Insert(doc Document) (string, error) {
+func (s *Store) Insert(doc map[string]any) (string, error) {
 	if s.closed.Load() {
 		return "", ErrStoreClosed
 	}
@@ -413,7 +410,7 @@ func (s *Store) Insert(doc Document) (string, error) {
 }
 
 // Update modifies an existing document and updates all affected indexes.
-func (s *Store) Update(docID string, doc Document) error {
+func (s *Store) Update(docID string, doc map[string]any) error {
 	if s.closed.Load() {
 		return ErrStoreClosed
 	}
@@ -709,12 +706,12 @@ func (s *Store) Close() {
 }
 
 // copyDocument creates a deep copy of a document.
-func copyDocument(src Document) Document {
+func copyDocument(src map[string]any) map[string]any {
 	if src == nil {
 		return nil
 	}
 
-	dst := make(Document, len(src))
+	dst := make(map[string]any, len(src))
 	for k, v := range src {
 		dst[k] = copyValue(v)
 	}
@@ -724,10 +721,8 @@ func copyDocument(src Document) Document {
 // copyValue creates a deep copy of a value, handling nested structures.
 func copyValue(src any) any {
 	switch v := src.(type) {
-	case Document:
-		return copyDocument(v)
 	case map[string]any:
-		return copyDocument(Document(v))
+		return copyDocument(v)
 	case []any:
 		dst := make([]any, len(v))
 		for i, elem := range v {
@@ -858,4 +853,3 @@ func isNumber(v any) bool {
 		return false
 	}
 }
-
