@@ -3,4 +3,4 @@
 
 ### Features
 
-* **store:** implement core in-memory document database ([474cb0a](https://github.com/asaidimu/go-store/commit/474cb0a5b78b7a57277d5f7856cb101663421d64))
+* **store:** implement core in-memory document database ([474cb0a](https://github.com/asaidimu/go-store/v2/commit/474cb0a5b78b7a57277d5f7856cb101663421d64))

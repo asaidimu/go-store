@@ -23,7 +23,7 @@ package main
 
 import (
 	"fmt"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {

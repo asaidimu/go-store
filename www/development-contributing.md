@@ -17,7 +17,7 @@ We welcome contributions to `go-store`! Here's how to get started.
 
 1.  **Clone the repository**:
     ```bash
-git clone https://github.com/asaidimu/go-store.git
+git clone https://github.com/asaidimu/go-store/v2.git
 cd go-store
     ```
 2.  **Build the project**:
@@ -90,7 +90,7 @@ For breaking changes, append `!` after the type/scope, or include `BREAKING CHAN
 
 ### Issue Reporting
 
-If you find a bug or have a feature request, please open an issue on the [GitHub Issues page](https://github.com/asaidimu/go-store/issues). When reporting a bug, please include:
+If you find a bug or have a feature request, please open an issue on the [GitHub Issues page](https://github.com/asaidimu/go-store/v2/issues). When reporting a bug, please include:
 
 *   A clear and concise description of the problem.
 *   Steps to reproduce the behavior.

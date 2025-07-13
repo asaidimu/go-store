@@ -1,7 +1,7 @@
 # go-store
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/asaidimu/go-store.svg)](https://pkg.go.dev/github.com/asaidimu/go-store)
-[![Build Status](https://github.com/asaidimu/go-store/workflows/Test%20Workflow/badge.svg)](https://github.com/asaidimu/go-store/actions)
+[![Go Reference](https://pkg.go.dev/badge/github.com/asaidimu/go-store/v2.svg)](https://pkg.go.dev/github.com/asaidimu/go-store/v2)
+[![Build Status](https://github.com/asaidimu/go-store/v2/workflows/Test%20Workflow/badge.svg)](https://github.com/asaidimu/go-store/v2/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An efficient, in-memory, concurrent-safe document store with built-in indexing capabilities.
@@ -57,13 +57,13 @@ Key considerations for `go-store` are its in-memory nature (data is not persiste
 To integrate `go-store` into your Go project, use `go get`:
 
 ```bash
-go get github.com/asaidimu/go-store
+go get github.com/asaidimu/go-store/v2
 ```
 
 Then, import it into your Go source files:
 
 ```go
-import store "github.com/asaidimu/go-store"
+import store "github.com/asaidimu/go-store/v2"
 ```
 
 ### Verification
@@ -71,7 +71,7 @@ import store "github.com/asaidimu/go-store"
 You can verify the installation by running the provided examples:
 
 ```bash
-git clone https://github.com/asaidimu/go-store.git
+git clone https://github.com/asaidimu/go-store/v2.git
 cd go-store
 go run examples/basic/main.go
 go run examples/intermediate/main.go
@@ -96,7 +96,7 @@ import (
 	"fmt"
 	"log"
 
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -164,7 +164,7 @@ import (
 	"log"
 	"time"
 
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -261,7 +261,7 @@ import (
 	"sync"
 	"time"
 
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -378,7 +378,7 @@ We welcome contributions to `go-store`! Here's how to get started.
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/asaidimu/go-store.git
+    git clone https://github.com/asaidimu/go-store/v2.git
     cd go-store
     ```
 2.  **Build the project**:
@@ -451,7 +451,7 @@ For breaking changes, append `!` after the type/scope, or include `BREAKING CHAN
 
 ### Issue Reporting
 
-If you find a bug or have a feature request, please open an issue on the [GitHub Issues page](https://github.com/asaidimu/go-store/issues). When reporting a bug, please include:
+If you find a bug or have a feature request, please open an issue on the [GitHub Issues page](https://github.com/asaidimu/go-store/v2/issues). When reporting a bug, please include:
 
 *   A clear and concise description of the problem.
 *   Steps to reproduce the behavior.

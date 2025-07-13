@@ -33,7 +33,7 @@ package main
 
 import (
 	"fmt"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -66,7 +66,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -153,7 +153,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -241,7 +241,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -315,7 +315,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -387,7 +387,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -468,7 +468,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -507,7 +507,7 @@ package main
 import (
 	"fmt"
 	"time"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -589,7 +589,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
@@ -661,7 +661,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store"
+	store "github.com/asaidimu/go-store/v2"
 )
 
 func main() {
