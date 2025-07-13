@@ -1,3 +1,15 @@
+# [3.0.0](https://github.com/asaidimu/go-store/compare/v2.0.1...v3.0.0) (2025-07-13)
+
+
+* build(module)!: update Go module to v3 ([258e66c](https://github.com/asaidimu/go-store/commit/258e66c0e112e84dc1ace4d814328d414f03d5e7))
+
+
+### BREAKING CHANGES
+
+* The Go module path has been updated from
+'github.com/asaidimu/go-store/v2' to 'github.com/asaidimu/go-store/v3'.
+Consumers must update their import statements to reflect the new major version.
+
 ## [2.0.1](https://github.com/asaidimu/go-store/compare/v2.0.0...v2.0.1) (2025-07-13)
 
 
