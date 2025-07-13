@@ -1,19 +1,18 @@
 # Project Documentation
 
-*Generated on: 7/10/2025, 1:23:49 PM*
+*Generated on: 7/13/2025, 8:40:41 PM*
 
 This documentation provides usage guides and insights into the project.
 
 ### Software Classification
 - **Type**: API/Library
 - **Characteristics**: 
-    - in-memory-storage
+    - in-memory database
     - concurrent-safe
-    - document-store
-    - indexing
-    - crud-operations
-    - optimistic-concurrency-control
-    - schemaless-data-model
+    - schemaless document store
+    - indexing capabilities
+    - crud operations
+    - document streaming
 
 ## Human-Readable Documentation
 
@@ -24,10 +23,9 @@ Start with the [Introduction](./usage/introduction.md).
 - [Core Operations](./usage/core-operations.md)
 - [Task-Based Guide](./usage/task-based-guide.md)
 - [Advanced Usage](./usage/advanced-usage.md)
+- [Problem Solving](./usage/problem-solving.md)
 - [Project Architecture](./usage/project-architecture.md)
 - [Development & Contributing](./usage/development-contributing.md)
-- [Problem Solving](./usage/problem-solving.md)
-- [Reference](./usage/reference.md)
 - [Integration Guide](./usage/integration-guide.md)
 - [Dependency Catalog](./usage/dependency-catalog.md)
 
@@ -38,4 +36,4 @@ Start with the [Introduction](./usage/introduction.md).
 
 
 ---
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*
+*Generated using Gemini AI on 7/13/2025, 8:40:41 PM. Review and refine as needed.*

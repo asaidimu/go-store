@@ -1,5 +1,16 @@
 # Problem Solving
 
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Problem Solving"
+description: "Problem Solving documentation and guidance"
+---
+# Problem Solving
+
 ## Problem Solving
 
 This section addresses common issues you might encounter while using `go-store` and provides solutions or workarounds.
@@ -32,5 +43,6 @@ A: Performance for `go-store` is excellent for in-memory operations. However, sc
 **Q: Are functional indexes supported?**
 A: As of the current version, `go-store` provides field-based indexes for exact and range lookups. The `advanced/main.go` example includes a *simulated* functional index, indicating this could be a potential future feature, but it's not natively implemented yet.
 
+
 ---
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*
+*Generated using Gemini AI on 7/13/2025, 8:40:41 PM. Review and refine as needed.*

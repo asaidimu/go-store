@@ -6,7 +6,7 @@ Go Runtime Environment (Go 1.24.4+ recommended). No special compiler settings or
 
 ## Initialization Patterns
 
-### Basic Store Initialization and Cleanup
+### Standard Store Initialization
 
 The most common way to initialize the store and ensure proper resource cleanup upon application shutdown.
 
@@ -29,6 +29,7 @@ func main() {
 
 	// ... perform store operations here ...
 }
+
 ```
 
 ## Common Integration Pitfalls
@@ -49,4 +50,4 @@ The `Store` instance should be initialized once at the application's startup pha
 
 
 ---
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*
+*Generated using Gemini AI on 7/13/2025, 8:40:41 PM. Review and refine as needed.*

@@ -1,6 +1,14 @@
 # Core Operations
 
-## Core Operations
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Core Operations"
+description: "Core Operations documentation and guidance"
+---
 
 This section elaborates on the fundamental document management operations provided by `go-store`.
 
@@ -82,5 +90,6 @@ if err != nil {
 *   **Idempotency**: Deleting a non-existent document will result in `ErrDocumentNotFound`.
 *   **Side Effects**: Removes the document from the main document map and from all associated indexes. Memory is released through garbage collection when the `DocumentSnapshot`'s reference count drops to zero.
 
+
 ---
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*
+*Generated using Gemini AI on 7/13/2025, 8:40:41 PM. Review and refine as needed.*

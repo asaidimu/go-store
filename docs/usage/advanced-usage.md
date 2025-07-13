@@ -1,5 +1,16 @@
 # Advanced Usage
 
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Advanced Usage"
+description: "Advanced Usage documentation and guidance"
+---
+# Advanced Usage
+
 ## Advanced Usage
 
 This section delves into more complex scenarios, including concurrent operations and internal design considerations that impact how you use `go-store`.
@@ -151,7 +162,7 @@ func main() {
 		fmt.Println("Original input modification DID affect stored data.")
 	}
 }
-```
+
 
 ---
-*Generated using Gemini AI on 7/10/2025, 1:23:49 PM. Review and refine as needed.*
+*Generated using Gemini AI on 7/13/2025, 8:40:41 PM. Review and refine as needed.*
