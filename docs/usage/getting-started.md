@@ -15,13 +15,13 @@ To use `go-store`, you need a working Go environment. The library is tested with
 To integrate `go-store` into your Go project, use `go get`:
 
 ```bash
-go get github.com/asaidimu/go-store/v2
+go get github.com/asaidimu/go-store/v3
 ```
 
 Then, import it into your Go source files:
 
 ```go
-import store "github.com/asaidimu/go-store/v2"
+import store "github.com/asaidimu/go-store/v3"
 ```
 
 ### Verification
@@ -30,7 +30,7 @@ You can verify the installation and explore basic functionality by running the p
 
 1.  **Clone the repository**:
     ```bash
-git clone https://github.com/asaidimu/go-store/v2.git
+git clone https://github.com/asaidimu/go-store/v3.git
 cd go-store
     ```
 2.  **Run examples**:
@@ -50,7 +50,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store/v2"
+	store "github.com/asaidimu/go-store/v3"
 )
 
 func main() {

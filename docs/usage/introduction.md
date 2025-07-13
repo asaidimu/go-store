@@ -4,8 +4,8 @@
 
 # go-store
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/asaidimu/go-store/v2.svg)](https://pkg.go.dev/github.com/asaidimu/go-store/v2)
-[![Build Status](https://github.com/asaidimu/go-store/v2/workflows/Test%20Workflow/badge.svg)](https://github.com/asaidimu/go-store/v2/actions)
+[![Go Reference](https://pkg.go.dev/badge/github.com/asaidimu/go-store/v3.svg)](https://pkg.go.dev/github.com/asaidimu/go-store/v3)
+[![Build Status](https://github.com/asaidimu/go-store/v3/workflows/Test%20Workflow/badge.svg)](https://github.com/asaidimu/go-store/v3/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An efficient, in-memory, concurrent-safe document store with built-in indexing capabilities.

@@ -20,7 +20,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store/v2"
+	store "github.com/asaidimu/go-store/v3"
 )
 
 func main() {
@@ -72,7 +72,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store/v2"
+	store "github.com/asaidimu/go-store/v3"
 )
 
 func main() {
@@ -124,7 +124,7 @@ package main
 import (
 	"fmt"
 	"log"
-	store "github.com/asaidimu/go-store/v2"
+	store "github.com/asaidimu/go-store/v3"
 )
 
 func main() {
@@ -176,7 +176,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	store "github.com/asaidimu/go-store/v2"
+	store "github.com/asaidimu/go-store/v3"
 )
 
 func main() {

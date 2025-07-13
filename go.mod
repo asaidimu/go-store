@@ -1,4 +1,4 @@
-module github.com/asaidimu/go-store/v2
+module github.com/asaidimu/go-store/v3
 
 go 1.24.4
 
