@@ -15,7 +15,7 @@ func TestNewStore(t *testing.T) {
 	if s == nil {
 		t.Fatal("NewStore returned nil")
 	}
-	if s.documents == nil {
+	if s.collection == nil {
 		t.Error("documents map is nil")
 	}
 	if s.indexes == nil {

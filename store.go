@@ -24,70 +24,156 @@ var (
 	ErrInvalidDocument  = errors.New("invalid document")
 )
 
-// DocumentSnapshot is an immutable, versioned snapshot of a document's data.
-// It uses reference counting to manage memory lifecycle safely across concurrent operations.
-type DocumentSnapshot struct {
-	data     map[string]any // The actual document data
-	version  uint64   // Version number for optimistic concurrency control
-	refCount int64    // Reference count for memory management
+// Document represents a stable document in the collection
+type Document struct {
+	id      string
+	data    map[string]any
+	version uint64
+	deleted bool
 }
 
-// release decrements the snapshot's reference count and clears data when no longer referenced.
-// This helps prevent memory leaks in concurrent environments.
-func (ds *DocumentSnapshot) release() {
-	if atomic.AddInt64(&ds.refCount, -1) == 0 {
-		// Clear the data map to help garbage collection
-		clear(ds.data)
+// Collection manages stable document storage with auto-scaling
+type Collection struct {
+	documents []*Document
+	freeSlots []int // Indices of deleted documents available for reuse
+	mu        sync.RWMutex
+}
+
+// NewCollection creates a new document collection
+func NewCollection() *Collection {
+	return &Collection{
+		documents: make([]*Document, 0),
+		freeSlots: make([]int, 0),
 	}
 }
 
-// DocumentHandle provides thread-safe access to the current state of a document.
-// It manages the lifecycle of document snapshots and ensures atomic updates.
+// Insert adds a new document to the collection and returns its stable index
+func (c *Collection) Insert(id string, data map[string]any, version uint64) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	doc := &Document{
+		id:      id,
+		data:    copyDocument(data),
+		version: version,
+		deleted: false,
+	}
+
+	// Reuse a free slot if available
+	if len(c.freeSlots) > 0 {
+		index := c.freeSlots[len(c.freeSlots)-1]
+		c.freeSlots = c.freeSlots[:len(c.freeSlots)-1]
+		c.documents[index] = doc
+		return index
+	}
+
+	// Otherwise append to the end
+	c.documents = append(c.documents, doc)
+	return len(c.documents) - 1
+}
+
+// Update modifies an existing document in place
+func (c *Collection) Update(index int, data map[string]any, version uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if index < 0 || index >= len(c.documents) {
+		return false
+	}
+
+	doc := c.documents[index]
+	if doc == nil || doc.deleted {
+		return false
+	}
+
+	// Update in place - this is the key optimization
+	doc.data = copyDocument(data)
+	doc.version = version
+	return true
+}
+
+// Get retrieves a document by index
+func (c *Collection) Get(index int) (*Document, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if index < 0 || index >= len(c.documents) {
+		return nil, false
+	}
+
+	doc := c.documents[index]
+	if doc == nil || doc.deleted {
+		return nil, false
+	}
+
+	// Return a copy to maintain immutability for callers
+	return &Document{
+		id:      doc.id,
+		data:    copyDocument(doc.data),
+		version: doc.version,
+		deleted: doc.deleted,
+	}, true
+}
+
+// Delete marks a document as deleted and reclaims memory immediately
+func (c *Collection) Delete(index int) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if index < 0 || index >= len(c.documents) {
+		return false
+	}
+
+	doc := c.documents[index]
+	if doc == nil || doc.deleted {
+		return false
+	}
+
+	// Mark as deleted and clear data immediately
+	doc.deleted = true
+	doc.data = nil
+	c.documents[index] = nil
+	c.freeSlots = append(c.freeSlots, index)
+	return true
+}
+
+// GetAllValid returns all non-deleted documents
+func (c *Collection) GetAllValid() []*Document {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var result []*Document
+	for _, doc := range c.documents {
+		if doc != nil && !doc.deleted {
+			result = append(result, &Document{
+				id:      doc.id,
+				data:    copyDocument(doc.data),
+				version: doc.version,
+				deleted: doc.deleted,
+			})
+		}
+	}
+	return result
+}
+
+// DocumentHandle provides a versioned reference to a stable document location.
+// It tracks the current version and provides atomic access to document state
+// without requiring complex reference counting.
 type DocumentHandle struct {
-	id      string                           // Unique document identifier
-	current atomic.Pointer[DocumentSnapshot] // Current snapshot pointer
-	mu      sync.RWMutex                     // Protects snapshot transitions
+	id       string
+	version  uint64
+	index    int // Stable index in the collection
+	document *Document
+	mu       sync.RWMutex
 }
 
-// read gets the current snapshot and increments its reference count.
-// Returns nil if the document has been deleted.
-func (dh *DocumentHandle) read() *DocumentSnapshot {
-	if snap := dh.current.Load(); snap != nil {
-		atomic.AddInt64(&snap.refCount, 1)
-		return snap
-	}
-	return nil
-}
-
-// write replaces the current snapshot with a new one and returns the previous snapshot.
-// The caller is responsible for releasing the returned snapshot.
-func (dh *DocumentHandle) write(data map[string]any, version uint64) *DocumentSnapshot {
-	dh.mu.Lock()
-	defer dh.mu.Unlock()
-
-	old := dh.current.Load()
-	newSnap := &DocumentSnapshot{
-		data:     data,
-		version:  version,
-		refCount: 1, // Start with one reference (the handle itself)
-	}
-	dh.current.Store(newSnap)
-	return old
-}
-
-// delete sets the current snapshot to nil and returns the previous snapshot.
-// The caller is responsible for releasing the returned snapshot.
-func (dh *DocumentHandle) delete() *DocumentSnapshot {
-	dh.mu.Lock()
-	defer dh.mu.Unlock()
-
-	old := dh.current.Load()
-	dh.current.Store(nil)
-	return old
+// HandleEntry consolidates handle management with index membership tracking
+type HandleEntry struct {
+	handle  *DocumentHandle
+	indexes []string
 }
 
 // indexKey represents a composite key for index entries.
-// It implements btree.Item for efficient B-tree operations.
 type indexKey struct {
 	values []any
 }
@@ -97,12 +183,9 @@ func (ik indexKey) Less(other btree.Item) bool {
 	otherKey := other.(indexKey)
 
 	// Compare values element by element
-	minLen := len(ik.values)
-	if len(otherKey.values) < minLen {
-		minLen = len(otherKey.values)
-	}
+	minLen := min(len(otherKey.values), len(ik.values))
 
-	for i := 0; i < minLen; i++ {
+	for i := range minLen {
 		if cmp := compareValues(ik.values[i], otherKey.values[i]); cmp != 0 {
 			return cmp < 0
 		}
@@ -112,10 +195,10 @@ func (ik indexKey) Less(other btree.Item) bool {
 	return len(ik.values) < len(otherKey.values)
 }
 
-// indexEntry stores a key and the set of documents that match it.
+// indexEntry stores a key and the set of document IDs that match it.
 type indexEntry struct {
-	key     indexKey
-	docRefs map[string]*DocumentHandle // Maps document ID to handle
+	key    indexKey
+	docIDs map[string]struct{} // Changed from handles to document IDs
 }
 
 // Less implements btree.Item interface for ordering index entries.
@@ -124,109 +207,124 @@ func (ie indexEntry) Less(other btree.Item) bool {
 }
 
 // fieldIndex is a B-tree based index on one or more document fields.
-// It maintains a sorted structure for efficient range queries and lookups.
 type fieldIndex struct {
-	name   string       // Index name
-	fields []string     // Fields included in this index
-	tree   *btree.BTree // B-tree for efficient range operations
-	mu     sync.RWMutex // Protects concurrent access to the tree
+	name       string
+	fields     []string
+	tree       *btree.BTree
+	collection *Collection // Reference to the stable collection
+	mu         sync.RWMutex
 }
 
 // newFieldIndex creates a new field index with the specified name and fields.
-func newFieldIndex(name string, fields []string) *fieldIndex {
+func newFieldIndex(name string, fields []string, collection *Collection) *fieldIndex {
 	return &fieldIndex{
-		name:   name,
-		fields: fields,
-		tree:   btree.New(32), // Degree of 32 provides good performance for most use cases
+		name:       name,
+		fields:     fields,
+		tree:       btree.New(32),
+		collection: collection,
 	}
 }
 
 // insertDocument adds a document to the index if it has values for all indexed fields.
-func (fi *fieldIndex) insertDocument(docRef *DocumentHandle, doc *DocumentSnapshot) {
+func (fi *fieldIndex) insertDocument(handle *DocumentHandle) bool {
+	doc, exists := fi.collection.Get(handle.index)
+	if !exists {
+		return false
+	}
+
 	keyValues := fi.extractKeyValues(doc.data)
 	if keyValues == nil {
-		return // Document doesn't have all required fields
+		return false // Document doesn't have all required fields
 	}
 
 	fi.mu.Lock()
 	defer fi.mu.Unlock()
-	fi.addToIndex(docRef, keyValues)
+	fi.addToIndex(handle.id, keyValues)
+	return true
 }
 
 // updateDocument updates a document's position in the index.
-// It removes the old entry and adds a new one if the indexed fields changed.
-func (fi *fieldIndex) updateDocument(docRef *DocumentHandle, oldDoc, newDoc *DocumentSnapshot) {
-	oldKeyValues := fi.extractKeyValues(oldDoc.data)
-	newKeyValues := fi.extractKeyValues(newDoc.data)
+func (fi *fieldIndex) updateDocument(handle *DocumentHandle, oldData map[string]any) bool {
+	doc, exists := fi.collection.Get(handle.index)
+	if !exists {
+		return false
+	}
+
+	oldKeyValues := fi.extractKeyValues(oldData)
+	newKeyValues := fi.extractKeyValues(doc.data)
 
 	// Optimization: if indexed fields haven't changed, no work needed
 	if reflect.DeepEqual(oldKeyValues, newKeyValues) {
-		return
+		return oldKeyValues != nil // Return true if document was/is indexed
 	}
 
 	fi.mu.Lock()
 	defer fi.mu.Unlock()
 
 	// Remove old entry if it existed
+	wasIndexed := false
 	if oldKeyValues != nil {
-		fi.removeFromIndex(docRef, oldKeyValues)
+		wasIndexed = true
+		fi.removeFromIndex(handle.id, oldKeyValues)
 	}
 
 	// Add new entry if document has all required fields
+	nowIndexed := false
 	if newKeyValues != nil {
-		fi.addToIndex(docRef, newKeyValues)
+		nowIndexed = true
+		fi.addToIndex(handle.id, newKeyValues)
 	}
+
+	return wasIndexed || nowIndexed
 }
 
 // deleteDocument removes a document from the index.
-func (fi *fieldIndex) deleteDocument(docRef *DocumentHandle, doc *DocumentSnapshot) {
-	keyValues := fi.extractKeyValues(doc.data)
+func (fi *fieldIndex) deleteDocument(docID string, data map[string]any) bool {
+	keyValues := fi.extractKeyValues(data)
 	if keyValues == nil {
-		return // Document wasn't indexed
+		return false // Document wasn't indexed
 	}
 
 	fi.mu.Lock()
 	defer fi.mu.Unlock()
-	fi.removeFromIndex(docRef, keyValues)
+	fi.removeFromIndex(docID, keyValues)
+	return true
 }
 
-// removeFromIndex removes a document reference from an index entry.
-// If the entry becomes empty, it's removed from the tree.
-func (fi *fieldIndex) removeFromIndex(docRef *DocumentHandle, keyValues []any) {
+// removeFromIndex removes a document ID from an index entry.
+func (fi *fieldIndex) removeFromIndex(docID string, keyValues []any) {
 	searchEntry := indexEntry{key: indexKey{values: keyValues}}
 
 	if item := fi.tree.Get(searchEntry); item != nil {
 		entry := item.(indexEntry)
-		delete(entry.docRefs, docRef.id)
+		delete(entry.docIDs, docID)
 
 		// Clean up empty entries
-		if len(entry.docRefs) == 0 {
+		if len(entry.docIDs) == 0 {
 			fi.tree.Delete(searchEntry)
 		}
 	}
 }
 
-// addToIndex adds a document reference to an index entry.
-// Creates a new entry if one doesn't exist for the key.
-func (fi *fieldIndex) addToIndex(docRef *DocumentHandle, keyValues []any) {
+// addToIndex adds a document ID to an index entry.
+func (fi *fieldIndex) addToIndex(docID string, keyValues []any) {
 	searchEntry := indexEntry{key: indexKey{values: keyValues}}
 
 	if item := fi.tree.Get(searchEntry); item != nil {
 		// Add to existing entry
 		entry := item.(indexEntry)
-		entry.docRefs[docRef.id] = docRef
+		entry.docIDs[docID] = struct{}{}
 	} else {
 		// Create new entry
 		entry := indexEntry{
-			key:     indexKey{values: keyValues},
-			docRefs: map[string]*DocumentHandle{docRef.id: docRef},
+			key:    indexKey{values: keyValues},
+			docIDs: map[string]struct{}{docID:{}},
 		}
 		fi.tree.ReplaceOrInsert(entry)
 	}
 }
 
 // extractKeyValues extracts the values for indexed fields from a document.
-// Returns nil if any required field is missing or nil.
 func (fi *fieldIndex) extractKeyValues(data map[string]any) []any {
 	values := make([]any, 0, len(fi.fields))
 
@@ -241,17 +339,17 @@ func (fi *fieldIndex) extractKeyValues(data map[string]any) []any {
 	return values
 }
 
-// lookup finds documents that exactly match the given values.
-func (fi *fieldIndex) lookup(values []any) []*DocumentHandle {
+// lookup finds document IDs that exactly match the given values.
+func (fi *fieldIndex) lookup(values []any) []string {
 	fi.mu.RLock()
 	defer fi.mu.RUnlock()
 
 	searchEntry := indexEntry{key: indexKey{values: values}}
 	if item := fi.tree.Get(searchEntry); item != nil {
 		entry := item.(indexEntry)
-		result := make([]*DocumentHandle, 0, len(entry.docRefs))
-		for _, docRef := range entry.docRefs {
-			result = append(result, docRef)
+		result := make([]string, 0, len(entry.docIDs))
+		for docID := range entry.docIDs {
+			result = append(result, docID)
 		}
 		return result
 	}
@@ -259,19 +357,19 @@ func (fi *fieldIndex) lookup(values []any) []*DocumentHandle {
 	return nil
 }
 
-// lookupRange finds documents within a given range of values (inclusive).
-func (fi *fieldIndex) lookupRange(minValues, maxValues []any) []*DocumentHandle {
+// lookupRange finds document IDs within a given range of values.
+func (fi *fieldIndex) lookupRange(minValues, maxValues []any) []string {
 	fi.mu.RLock()
 	defer fi.mu.RUnlock()
 
-	var result []*DocumentHandle
+	var result []string
 	minEntry := indexEntry{key: indexKey{values: minValues}}
 	maxEntry := indexEntry{key: indexKey{values: maxValues}}
 
 	fi.tree.AscendRange(minEntry, maxEntry, func(item btree.Item) bool {
 		entry := item.(indexEntry)
-		for _, docRef := range entry.docRefs {
-			result = append(result, docRef)
+		for docID := range entry.docIDs {
+			result = append(result, docID)
 		}
 		return true // Continue iteration
 	})
@@ -281,13 +379,12 @@ func (fi *fieldIndex) lookupRange(minValues, maxValues []any) []*DocumentHandle 
 
 // DocumentResult holds the data and metadata for a document returned from a query.
 type DocumentResult struct {
-	ID      string   // Document identifier
-	Data    map[string]any // Document data (deep copy)
-	Version uint64   // Document version
+	ID      string
+	Data    map[string]any
+	Version uint64
 }
 
 // DocumentStream provides an iterator-like interface for streaming documents.
-// It supports cancellation and buffering for efficient processing of large result sets.
 type DocumentStream struct {
 	results chan DocumentResult
 	errors  chan error
@@ -296,7 +393,6 @@ type DocumentStream struct {
 }
 
 // NewDocumentStream creates a new document stream with the specified buffer size.
-// A buffer size of 0 creates an unbuffered channel.
 func NewDocumentStream(bufferSize int) *DocumentStream {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -307,7 +403,7 @@ func NewDocumentStream(bufferSize int) *DocumentStream {
 		results = make(chan DocumentResult)
 	}
 
-	err := make(chan error, 1) // Small buffer for errors
+	err := make(chan error, 1)
 
 	return &DocumentStream{
 		ctx:     ctx,
@@ -318,7 +414,6 @@ func NewDocumentStream(bufferSize int) *DocumentStream {
 }
 
 // Next returns the next document from the stream.
-// It blocks until a document is available, an error occurs, or the stream is closed.
 func (ds *DocumentStream) Next() (DocumentResult, error) {
 	select {
 	case result, ok := <-ds.results:
@@ -352,26 +447,26 @@ func (ds *DocumentStream) Close() {
 }
 
 // Store is an in-memory document database with indexing capabilities.
-// It provides ACID-like properties for document operations and supports
-// concurrent access with proper synchronization.
 type Store struct {
-	documents map[string]*DocumentHandle // Maps document ID to handle
-	indexes   map[string]*fieldIndex     // Maps index name to index
-	mu        sync.RWMutex               // Protects maps and coordinates operations
-	version   uint64                     // Global version counter
-	closed    atomic.Bool                // Indicates if store is closed
+	collection *Collection
+	handles    map[string]HandleEntry // Centralized handle management
+	indexes    map[string]*fieldIndex // Maps index name to index
+	mu         sync.RWMutex           // Protects handles and indexes maps
+	version    uint64                 // Global version counter
+	closed     atomic.Bool            // Indicates if store is closed
 }
 
 // NewStore creates a new, empty document store.
 func NewStore() *Store {
+	collection := NewCollection()
 	return &Store{
-		documents: make(map[string]*DocumentHandle),
-		indexes:   make(map[string]*fieldIndex),
+		collection: collection,
+		handles:    make(map[string]HandleEntry),
+		indexes:    make(map[string]*fieldIndex),
 	}
 }
 
 // Insert adds a new document to the store and updates all indexes.
-// Returns the generated document ID or an error.
 func (s *Store) Insert(doc map[string]any) (string, error) {
 	if s.closed.Load() {
 		return "", ErrStoreClosed
@@ -381,30 +476,37 @@ func (s *Store) Insert(doc map[string]any) (string, error) {
 		return "", ErrInvalidDocument
 	}
 
-	// Generate unique ID and prepare document
-	docID := uuid.New().String()
-	docData := copyDocument(doc)
+	// Generate unique ID and version
+	docID := uuid.Must(uuid.NewV7()).String()
 	version := atomic.AddUint64(&s.version, 1)
 
-	// Create document handle and initial snapshot
-	docHandle := &DocumentHandle{id: docID}
-	snapshot := &DocumentSnapshot{
-		data:     docData,
-		version:  version,
-		refCount: 1,
-	}
-	docHandle.current.Store(snapshot)
+	// Insert into collection to get stable index
+	index := s.collection.Insert(docID, doc, version)
 
-	// Add to store and update indexes atomically
+	// Create handle
+	handle := &DocumentHandle{
+		id:    docID,
+		index: index,
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.documents[docID] = docHandle
-
-	// Update all indexes
-	for _, idx := range s.indexes {
-		idx.insertDocument(docHandle, snapshot)
+	// Create handle entry
+	entry := HandleEntry{
+		handle:  handle,
+		indexes: make([]string, 0, len(s.indexes)),
 	}
+
+	// Update all indexes synchronously
+	for idxName, idx := range s.indexes {
+		if idx.insertDocument(handle) {
+			entry.indexes = append(entry.indexes, idxName)
+		}
+	}
+
+	// Add handle entry to store
+	s.handles[docID] = entry
 
 	return docID, nil
 }
@@ -422,28 +524,36 @@ func (s *Store) Update(docID string, doc map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	docHandle, exists := s.documents[docID]
+	entry, exists := s.handles[docID]
 	if !exists {
 		return ErrDocumentNotFound
 	}
 
-	// Atomically replace the document snapshot
-	oldSnapshot := docHandle.write(copyDocument(doc), atomic.AddUint64(&s.version, 1))
-	if oldSnapshot == nil {
+	// Get old data for index updates
+	currentDoc, exists := s.collection.Get(entry.handle.index)
+	if !exists {
 		return ErrDocumentDeleted
 	}
 
-	// Update all indexes with old and new versions
-	newSnapshot := docHandle.read()
-	if newSnapshot != nil {
-		for _, idx := range s.indexes {
-			idx.updateDocument(docHandle, oldSnapshot, newSnapshot)
-		}
-		newSnapshot.release()
+	currentData := copyDocument(currentDoc.data)
+
+	// Update in collection
+	version := atomic.AddUint64(&s.version, 1)
+	if !s.collection.Update(entry.handle.index, doc, version) {
+		return ErrDocumentDeleted
 	}
 
-	// Release the old snapshot
-	oldSnapshot.release()
+	// Update indexes and track new membership
+	newIndexes := make([]string, 0, len(s.indexes))
+	for idxName, idx := range s.indexes {
+		if idx.updateDocument(entry.handle, currentData) {
+			newIndexes = append(newIndexes, idxName)
+		}
+	}
+
+	// Update handle entry with new index membership
+	entry.indexes = newIndexes
+	s.handles[docID] = entry
 
 	return nil
 }
@@ -457,24 +567,28 @@ func (s *Store) Delete(docID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	docHandle, exists := s.documents[docID]
+	entry, exists := s.handles[docID]
 	if !exists {
 		return ErrDocumentNotFound
 	}
 
-	// Remove from document map and get final snapshot
-	delete(s.documents, docID)
-	deletedSnapshot := docHandle.delete()
-
-	if deletedSnapshot != nil {
-		// Remove from all indexes
-		for _, idx := range s.indexes {
-			idx.deleteDocument(docHandle, deletedSnapshot)
-		}
-
-		// Release the final snapshot
-		deletedSnapshot.release()
+	// Get document data for index cleanup
+	doc, exists := s.collection.Get(entry.handle.index)
+	if !exists {
+		return ErrDocumentDeleted
 	}
+	docData := copyDocument(doc.data)
+
+	// Remove from only the indexes this document is actually in
+	for _, indexName := range entry.indexes {
+		if idx, exists := s.indexes[indexName]; exists {
+			idx.deleteDocument(docID, docData)
+		}
+	}
+
+	// Remove from collection and handles
+	s.collection.Delete(entry.handle.index)
+	delete(s.handles, docID)
 
 	return nil
 }
@@ -486,88 +600,64 @@ func (s *Store) Get(docID string) (*DocumentResult, error) {
 	}
 
 	s.mu.RLock()
-	docHandle, exists := s.documents[docID]
+	entry, exists := s.handles[docID]
 	s.mu.RUnlock()
 
 	if !exists {
 		return nil, ErrDocumentNotFound
 	}
 
-	snapshot := docHandle.read()
-	if snapshot == nil {
+	doc, exists := s.collection.Get(entry.handle.index)
+	if !exists {
 		return nil, ErrDocumentDeleted
 	}
-	defer snapshot.release()
 
 	return &DocumentResult{
 		ID:      docID,
-		Data:    copyDocument(snapshot.data),
-		Version: snapshot.version,
+		Data:    doc.data,
+		Version: doc.version,
 	}, nil
 }
 
 // Stream returns a stream of all documents currently in the store.
-// The stream provides a consistent snapshot of documents at the time it was created.
 func (s *Store) Stream(bufferSize int) *DocumentStream {
-    ds := NewDocumentStream(bufferSize)
+	ds := NewDocumentStream(bufferSize)
 
-    if s.closed.Load() {
-        s.closeStreamWithError(ds, ErrStoreClosed)
-        return ds
-    }
+	if s.closed.Load() {
+		s.closeStreamWithError(ds, ErrStoreClosed)
+		return ds
+	}
 
-    // Capture snapshot immediately, not in the goroutine
-    var docHandles []*DocumentHandle
-    s.mu.RLock()
-    for _, docHandle := range s.documents {
-        if docHandle != nil && docHandle.id != "" {
-            docHandles = append(docHandles, docHandle)
-        }
-    }
-    s.mu.RUnlock()
+	// Get all documents from collection
+	documents := s.collection.GetAllValid()
 
-    // Start streaming with the captured snapshot
-    go s.streamDocuments(ds, docHandles)
-    return ds
+	// Start streaming
+	go s.streamDocuments(ds, documents)
+	return ds
 }
 
-// streamDocuments is a helper that runs the actual streaming logic in a goroutine.
-func (s *Store) streamDocuments(ds *DocumentStream, docHandles []*DocumentHandle) {
+// streamDocuments runs the actual streaming logic in a goroutine.
+func (s *Store) streamDocuments(ds *DocumentStream, documents []*Document) {
 	defer close(ds.results)
 	defer close(ds.errors)
 
-	// Stream documents
-	for _, docHandle := range docHandles {
+	for _, doc := range documents {
 		select {
 		case <-ds.ctx.Done():
 			return
 		default:
-			if !s.streamSingleDocument(ds, docHandle) {
+			result := DocumentResult{
+				ID:      doc.id,
+				Data:    doc.data,
+				Version: doc.version,
+			}
+
+			select {
+			case ds.results <- result:
+			case <-ds.ctx.Done():
 				return
 			}
 		}
-	}
-}
-
-// streamSingleDocument streams a single document and returns false if streaming should stop.
-func (s *Store) streamSingleDocument(ds *DocumentStream, docHandle *DocumentHandle) bool {
-	snapshot := docHandle.read()
-	if snapshot == nil {
-		return true // Skip deleted documents
-	}
-	defer snapshot.release()
-
-	result := DocumentResult{
-		ID:      docHandle.id,
-		Data:    copyDocument(snapshot.data),
-		Version: snapshot.version,
-	}
-
-	select {
-	case ds.results <- result:
-		return true
-	case <-ds.ctx.Done():
-		return false
 	}
 }
 
@@ -598,14 +688,15 @@ func (s *Store) CreateIndex(indexName string, fields []string) error {
 	}
 
 	// Create new index
-	index := newFieldIndex(indexName, fields)
+	index := newFieldIndex(indexName, fields, s.collection)
 	s.indexes[indexName] = index
 
-	// Populate with existing documents
-	for _, docHandle := range s.documents {
-		if snapshot := docHandle.read(); snapshot != nil {
-			index.insertDocument(docHandle, snapshot)
-			snapshot.release()
+	// Populate with existing documents and update handle entries
+	for docID, entry := range s.handles {
+		if index.insertDocument(entry.handle) {
+			// Update handle entry to include new index
+			entry.indexes = append(entry.indexes, indexName)
+			s.handles[docID] = entry
 		}
 	}
 
@@ -623,6 +714,18 @@ func (s *Store) DropIndex(indexName string) error {
 
 	if _, exists := s.indexes[indexName]; !exists {
 		return ErrIndexNotFound
+	}
+
+	// Remove index from all handle entries
+	for docID, entry := range s.handles {
+		newIndexes := make([]string, 0, len(entry.indexes))
+		for _, idxName := range entry.indexes {
+			if idxName != indexName {
+				newIndexes = append(newIndexes, idxName)
+			}
+		}
+		entry.indexes = newIndexes
+		s.handles[docID] = entry
 	}
 
 	delete(s.indexes, indexName)
@@ -665,28 +768,32 @@ func (s *Store) LookupRange(indexName string, minValues, maxValues []any) ([]*Do
 
 // lookupWithIndex performs an exact lookup using the specified index.
 func (s *Store) lookupWithIndex(index *fieldIndex, values []any) ([]*DocumentResult, error) {
-	docRefs := index.lookup(values)
-	return s.collectDocumentResults(docRefs), nil
+	docIDs := index.lookup(values)
+	return s.collectDocumentResults(docIDs), nil
 }
 
 // lookupRangeWithIndex performs a range lookup using the specified index.
 func (s *Store) lookupRangeWithIndex(index *fieldIndex, minValues, maxValues []any) ([]*DocumentResult, error) {
-	docRefs := index.lookupRange(minValues, maxValues)
-	return s.collectDocumentResults(docRefs), nil
+	docIDs := index.lookupRange(minValues, maxValues)
+	return s.collectDocumentResults(docIDs), nil
 }
 
-// collectDocumentResults converts document handles to results.
-func (s *Store) collectDocumentResults(docRefs []*DocumentHandle) []*DocumentResult {
-	results := make([]*DocumentResult, 0, len(docRefs))
+// collectDocumentResults converts document IDs to results.
+func (s *Store) collectDocumentResults(docIDs []string) []*DocumentResult {
+	results := make([]*DocumentResult, 0, len(docIDs))
 
-	for _, docRef := range docRefs {
-		if snapshot := docRef.read(); snapshot != nil {
-			results = append(results, &DocumentResult{
-				ID:      docRef.id,
-				Data:    copyDocument(snapshot.data),
-				Version: snapshot.version,
-			})
-			snapshot.release()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, docID := range docIDs {
+		if entry, exists := s.handles[docID]; exists {
+			if doc, exists := s.collection.Get(entry.handle.index); exists {
+				results = append(results, &DocumentResult{
+					ID:      docID,
+					Data:    doc.data,
+					Version: doc.version,
+				})
+			}
 		}
 	}
 
@@ -701,7 +808,7 @@ func (s *Store) Close() {
 	defer s.mu.Unlock()
 
 	// Clear maps to help garbage collection
-	clear(s.documents)
+	clear(s.handles)
 	clear(s.indexes)
 }
 
@@ -744,7 +851,6 @@ func copyValue(src any) any {
 }
 
 // compareValues compares two values for B-tree ordering.
-// It handles different types consistently and provides stable sorting.
 func compareValues(a, b any) int {
 	// Handle nil values
 	if a == nil && b == nil {
