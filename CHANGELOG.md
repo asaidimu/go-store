@@ -1,3 +1,10 @@
+# [3.1.0](https://github.com/asaidimu/go-store/compare/v3.0.0...v3.1.0) (2025-07-17)
+
+
+### Features
+
+* **store:** Introduce bidirectional cursor and refactor storage engine ([5d1ae75](https://github.com/asaidimu/go-store/commit/5d1ae75dd340af8fd6c8fada8779bcdb50e9d74a))
+
 # [3.0.0](https://github.com/asaidimu/go-store/compare/v2.0.1...v3.0.0) (2025-07-13)
 
 
