@@ -1,3 +1,10 @@
+# [3.2.0](https://github.com/asaidimu/go-store/compare/v3.1.0...v3.2.0) (2025-07-19)
+
+
+### Features
+
+* **docs:** introduce new Cursor API documentation and enhance developer experience ([6a873ad](https://github.com/asaidimu/go-store/commit/6a873adc2152ea012041a3b82f9843288b0b57b2))
+
 # [3.1.0](https://github.com/asaidimu/go-store/compare/v3.0.0...v3.1.0) (2025-07-17)
 
 
