@@ -27,10 +27,5 @@ type DocumentResult struct {
 
 **Related Methods**: `Get`, `Stream`, `Lookup`, `LookupRange`
 
-### Interface Contract
-
-#### Parameter Object Structures
-
-
 ---
 

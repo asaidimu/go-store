@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: "Documentation",
   lang: 'en-US',
-  base: '/go-store',
+  base: '/',
   lastUpdated: true,
   cleanUrls: true,
 
@@ -30,16 +30,16 @@ export default defineConfig({
         "link": "/advanced-usage"
     },
     {
-        "text": "Project Architecture",
-        "link": "/project-architecture"
+        "text": "Problem Solving",
+        "link": "/problem-solving"
     },
     {
         "text": "Development & Contributing",
         "link": "/development-contributing"
     },
     {
-        "text": "Problem Solving",
-        "link": "/problem-solving"
+        "text": "Project Architecture",
+        "link": "/project-architecture"
     },
     {
         "text": "Reference",
@@ -50,10 +50,6 @@ export default defineConfig({
     {
         "text": "Getting Started",
         "items": [
-            {
-                "text": "Getting Started",
-                "link": "/getting-started#getting-started"
-            },
             {
                 "text": "Prerequisites",
                 "link": "/getting-started#prerequisites"
@@ -67,18 +63,14 @@ export default defineConfig({
                 "link": "/getting-started#verification"
             },
             {
-                "text": "First Tasks: Basic Document Operations",
-                "link": "/getting-started#first-tasks-basic-document-operations"
+                "text": "Basic Document Operations",
+                "link": "/getting-started#basic-document-operations"
             }
         ]
     },
     {
         "text": "Core Operations",
         "items": [
-            {
-                "text": "Core Operations",
-                "link": "/core-operations#core-operations"
-            },
             {
                 "text": "Initializing the Store",
                 "link": "/core-operations#initializing-the-store"
@@ -104,10 +96,6 @@ export default defineConfig({
     {
         "text": "Task-Based Guide",
         "items": [
-            {
-                "text": "Task-Based Guide",
-                "link": "/task-based-guide#task-based-guide"
-            },
             {
                 "text": "Indexing and Querying Data",
                 "link": "/task-based-guide#indexing-and-querying-data"
@@ -144,15 +132,19 @@ export default defineConfig({
         ]
     },
     {
-        "text": "Project Architecture",
+        "text": "Problem Solving",
         "items": [
             {
-                "text": "Project Architecture",
-                "link": "/project-architecture#project-architecture"
+                "text": "Problem Solving",
+                "link": "/problem-solving#problem-solving"
             },
             {
-                "text": "Data Flow",
-                "link": "/project-architecture#data-flow"
+                "text": "Troubleshooting Common Errors",
+                "link": "/problem-solving#troubleshooting-common-errors"
+            },
+            {
+                "text": "FAQ (Frequently Asked Questions)",
+                "link": "/problem-solving#faq-frequently-asked-questions"
             }
         ]
     },
@@ -186,19 +178,15 @@ export default defineConfig({
         ]
     },
     {
-        "text": "Problem Solving",
+        "text": "Project Architecture",
         "items": [
             {
-                "text": "Problem Solving",
-                "link": "/problem-solving#problem-solving"
+                "text": "Project Architecture",
+                "link": "/project-architecture#project-architecture"
             },
             {
-                "text": "Troubleshooting Common Errors",
-                "link": "/problem-solving#troubleshooting-common-errors"
-            },
-            {
-                "text": "FAQ (Frequently Asked Questions)",
-                "link": "/problem-solving#faq-frequently-asked-questions"
+                "text": "Data Flow",
+                "link": "/project-architecture#data-flow"
             }
         ]
     },
@@ -214,6 +202,14 @@ export default defineConfig({
     {
         "text": "Interfaces",
         "items": [
+            {
+                "text": "DocumentLike",
+                "link": "/reference/interfaces#documentlike"
+            },
+            {
+                "text": "Cursor",
+                "link": "/reference/interfaces#cursor"
+            },
             {
                 "text": "Document",
                 "link": "/reference/interfaces#document"

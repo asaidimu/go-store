@@ -7,6 +7,17 @@ next: true
 title: "Getting Started"
 description: "Getting Started documentation and guidance"
 ---
+# Getting Started
+
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Getting Started"
+description: "Getting Started documentation and guidance"
+---
 
 This section will guide you through setting up `go-store` and performing your first tasks.
 
@@ -116,7 +127,5 @@ func main() {
 		fmt.Printf("Attempted to get deleted document %s: %v (Expected error)\n", id1, err)
 	}
 }
-```
 
-This simple flow covers the essential operations for managing documents within `go-store`.
 

@@ -14,7 +14,7 @@ Go Runtime Environment (Go 1.24.4+ recommended). No special compiler settings or
 
 ## Initialization Patterns
 
-### The most common way to initialize the store and ensure proper resource cleanup upon application shutdown.
+### The `NewStore()` function initializes a new `Store` instance. It is crucial to defer the `Close()` method call immediately after initialization to ensure that all internal resources are properly released when the function or application exits.
 
 
 

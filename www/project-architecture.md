@@ -9,6 +9,17 @@ description: "Project Architecture documentation and guidance"
 ---
 # Project Architecture
 
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Project Architecture"
+description: "Project Architecture documentation and guidance"
+---
+# Project Architecture
+
 ## Project Architecture
 
 `go-store` is structured around several key components that work together to provide a robust in-memory document store.
@@ -26,4 +37,5 @@ description: "Project Architecture documentation and guidance"
 2.  **Update (`Update`)**: A new `DocumentSnapshot` with an incremented global version is created from the updated data. The `DocumentHandle`'s `atomic.Pointer` is atomically swapped to point to this new snapshot. The old snapshot's reference count is decremented. All `fieldIndex`es are updated to reflect potential changes in indexed fields.
 3.  **Deletion (`Delete`)**: The `DocumentHandle` is removed from the `Store`'s `documents` map, and its internal snapshot pointer is set to `nil`. The final `DocumentSnapshot` is then passed to all `fieldIndex`es for removal, and its reference count is decremented.
 4.  **Retrieval (`Get`, `Lookup`, `Stream`)**: When a document is read, its `DocumentHandle` is accessed. A `DocumentSnapshot` is retrieved, and its reference count is temporarily incremented (`read()` method) to prevent it from being garbage collected while in use. Once processed, the snapshot's reference count is decremented (`release()` method).
+
 

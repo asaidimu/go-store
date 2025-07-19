@@ -7,6 +7,17 @@ next: true
 title: "Task-Based Guide"
 description: "Task-Based Guide documentation and guidance"
 ---
+# Task-Based Guide
+
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Task-Based Guide"
+description: "Task-Based Guide documentation and guidance"
+---
 
 This section focuses on common tasks you'll perform with `go-store` beyond basic CRUD operations.
 
@@ -124,20 +135,18 @@ for {
     docResult, err := docStream.Next()
     if err != nil {
         // ErrStreamClosed indicates the stream has finished or was cancelled.
-        if err == store.ErrStreamClosed {
-            fmt.Println("Document stream finished.")
-            break
-        }
-        log.Printf("Error reading from stream: %v", err)
-        break
+        if err == store.ErrStreamClosed { break }
+        log.Fatalf("Stream error: %v", err)
     }
-    fmt.Printf("  Streamed: ID=%s, Name=%s, Age=%.0f\n", 
-               docResult.ID, docResult.Data["name"], docResult.Data["age"])
+    fmt.Printf("  Streamed: %s\n", docResult.Data["item"])
+    count++
 }
+fmt.Printf("Total streamed documents: %d\n", count)
 ```
 
 *   **Snapshot Consistency**: When `Stream` is called, it captures a snapshot of the documents currently in the store. Subsequent modifications (inserts, updates, deletes) to the store will *not* affect the documents being streamed.
 *   **Buffer Size**: The `bufferSize` parameter affects the capacity of the internal Go channel used for streaming. A non-zero buffer can improve performance by allowing documents to be pushed ahead of consumption, especially when the consumer is slower than the producer. A `bufferSize` of `0` creates an unbuffered channel.
 *   **Cancellation**: The `DocumentStream` includes an internal `context.Context` which can be cancelled by calling `docStream.Close()`. This is crucial for stopping iteration early and releasing resources if you don't need to consume all documents.
 *   **Error Handling**: `Next()` will return `store.ErrStreamClosed` when all documents have been streamed or if the stream was explicitly closed. Other errors might indicate underlying issues (e.g., context cancellation).
+
 

@@ -9,6 +9,17 @@ description: "Development & Contributing documentation and guidance"
 ---
 # Development & Contributing
 
+---
+outline: "deep"
+lastUpdated: true
+editLink: true
+prev: true
+next: true
+title: "Development & Contributing"
+description: "Development & Contributing documentation and guidance"
+---
+# Development & Contributing
+
 ## Development & Contributing
 
 We welcome contributions to `go-store`! Here's how to get started.
@@ -97,4 +108,5 @@ If you find a bug or have a feature request, please open an issue on the [GitHub
 *   Expected behavior.
 *   Actual behavior.
 *   Your Go version and OS.
+
 

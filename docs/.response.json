@@ -3,55 +3,299 @@
     "primaryType": "API/Library",
     "confidence": 0.95,
     "characteristics": [
-      "in-memory database",
+      "in-memory",
       "concurrent-safe",
-      "schemaless document store",
-      "indexing capabilities",
-      "crud operations",
-      "document streaming"
+      "document-oriented",
+      "indexed"
     ],
     "adaptations": [
-      "Focus on function signatures and usage patterns",
-      "Detailed explanation of concurrency model and data consistency",
-      "Comprehensive API reference for programmatic integration"
+      "efficient-concurrent-access",
+      "schemaless-data-storage"
     ]
   },
-  "introduction": "This documentation provides a comprehensive guide to `go-store`, an efficient, in-memory, concurrent-safe document store with built-in indexing capabilities. Designed for high-performance applications requiring fast, concurrent access to schemaless data, `go-store` offers core CRUD operations, flexible document schemas, and advanced features like field-based indexing, range queries, and document streaming. It leverages Go's concurrency primitives for thread-safe operations, making it suitable for caching layers, temporary data storage, or embedded application-level databases where data persistence is managed externally or not required.",
+  "introduction": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Introduction\"\ndescription: \"Introduction to go-store: an in-memory, concurrent-safe document store\"\n---\n# Welcome to go-store!\n\n`go-store` is an efficient, in-memory, concurrent-safe document store with built-in indexing capabilities. It's designed for Go applications requiring fast, concurrent access to schemaless data, making it ideal for caching layers, temporary data storage, or embedded application-level databases.\n\n## Core Concepts\n\nAt its heart, `go-store` operates on documents, which are flexible, schemaless key-value maps (`map[string]any`). Each document is assigned a unique identifier (UUID) upon insertion and is versioned to support optimistic concurrency control.\n\n### In-Memory Design\n\nAll data is held in RAM, providing lightning-fast read and write operations. However, this also means data is volatile and will be lost when the application shuts down or crashes. For persistence, `go-store` would need to be integrated with an external serialization/deserialization mechanism.\n\n### Concurrency Model\n\n`go-store` is built with concurrency as a first-class citizen. It uses a combination of `sync.RWMutex` for coarse-grained protection of overall store structures (like adding/removing indexes or documents from internal maps) and `atomic.Pointer` for fine-grained, non-blocking updates and reads of individual document states. This allows multiple goroutines to safely interact with the store simultaneously without corrupting data.\n\n### Indexing\n\nTo enable efficient data retrieval, `go-store` supports the creation of B-tree based indexes on document fields. These indexes can be single-field or composite (multiple fields), allowing for fast exact-match lookups and range queries.\n\n## Architecture Overview\n\nThe system is composed of several interconnected internal components:\n\n*   **`Store`**: The central orchestrator, managing documents and indexes.\n*   **`Document`**: The basic unit of data, represented as a flexible `map[string]any`.\n*   **`DocumentHandle`**: An internal, thread-safe reference to a document, managing its versioned snapshots.\n*   **`DocumentSnapshot`**: An immutable, versioned copy of a document's data, used for consistent reads and managed with reference counting for memory safety.\n*   **`fieldIndex`**: Represents an individual B-tree index, facilitating fast queries.\n*   **`DocumentStream`**: Provides an iterator-like interface for efficient, buffered iteration over documents.\n\nThis robust architecture ensures data consistency, high performance, and safe concurrent access in Go applications.\n",
   "sections": [
     {
       "title": "Getting Started",
       "path": "getting-started.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Getting Started\"\ndescription: \"Getting Started documentation and guidance\"\n---\n\nThis section will guide you through setting up `go-store` and performing your first tasks.\n\n### Prerequisites\n\nTo use `go-store`, you need a working Go environment. The library is tested with and recommends:\n\n*   [Go](https://go.dev/dl/) (version 1.24.4 or higher, as specified in `go.mod` if present).\n\n### Installation Steps\n\nTo integrate `go-store` into your Go project, use `go get`:\n\n```bash\ngo get github.com/asaidimu/go-store/v3\n```\n\nThen, import it into your Go source files:\n\n```go\nimport store \"github.com/asaidimu/go-store/v3\"\n```\n\n### Verification\n\nYou can verify the installation and explore basic functionality by running the provided examples from the `go-store` repository:\n\n1.  **Clone the repository**:\n\n```bash\ngit clone https://github.com/asaidimu/go-store/v3.git\ncd go-store\n```\n\n2.  **Run examples**:\n```bash\ngo run examples/basic/main.go\ngo run examples/intermediate/main.go\ngo run examples/advanced/main.go\n```\n\n### Basic Document Operations\n\nThe most common operations involve creating, reading, updating, and deleting documents. Documents are represented as a `store.Document` (which is a `map[string]any`).\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\t// 1. Initialize the Store\n\t// Always defer s.Close() to ensure resources are properly released.\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// 2. Insert a New Document\n\t// The Insert method returns the unique ID of the new document.\n\tdoc1 := store.Document{\"title\": \"My First Doc\", \"author\": \"Alice\"}\n\tid1, err := s.Insert(doc1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to insert document: %v\", err)\n\t}\n\tfmt.Printf(\"Inserted document with ID: %s\\n\", id1)\n\n\t// 3. Retrieve a Document by ID\n\t// Get returns a DocumentResult containing the ID, data, and version.\n\tretrievedDoc, err := s.Get(id1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to get document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Retrieved: ID=%s, Title='%s', Version=%d\\n\",\n\t\tretrievedDoc.ID, retrievedDoc.Data[\"title\"], retrievedDoc.Version)\n\n\t// 4. Update an Existing Document\n\t// Provide the ID and the new document data. Existing fields are replaced,\n\t// new fields are added, and fields not present in the new doc are removed.\n\tupdatedDoc1 := store.Document{\"title\": \"My First Doc (Revised)\", \"author\": \"Alice Smith\", \"pages\": 150}\n\terr = s.Update(id1, updatedDoc1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to update document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Updated document with ID: %s\\n\", id1)\n\n\t// Verify the update\n\tretrievedUpdatedDoc, err := s.Get(id1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to get updated document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Updated retrieved: ID=%s, Title='%s', Pages=%.0f, Version=%d\\n\",\n\t\tretrievedUpdatedDoc.ID, retrievedUpdatedDoc.Data[\"title\"], retrievedUpdatedDoc.Data[\"pages\"], retrievedUpdatedDoc.Version)\n\n\t// 5. Delete a Document\n\terr = s.Delete(id1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to delete document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Deleted document with ID: %s\\n\", id1)\n\n\t// 6. Attempt to retrieve a deleted document (expected to fail)\n\t_, err = s.Get(id1)\n\tif err != nil {\n\t\tfmt.Printf(\"Attempted to get deleted document %s: %v (Expected error)\\n\", id1, err)\n\t}\n}\n"
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Getting Started\"\ndescription: \"Getting Started documentation and guidance\"\n---\n\nThis section will guide you through setting up `go-store` and performing your first tasks.\n\n### Prerequisites\n\nTo use `go-store`, you need a working Go environment. The library is tested with and recommends:\n\n*   [Go](https://go.dev/dl/) (version 1.24.4 or higher, as specified in `go.mod` if present).\n\n### Installation Steps\n\nTo integrate `go-store` into your Go project, use `go get`:\n\n```bash\ngo get github.com/asaidimu/go-store/v3\n```\n\nThen, import it into your Go source files:\n\n```go\nimport store \"github.com/asaidimu/go-store/v3\"\n```\n\n### Verification\n\nYou can verify the installation and explore basic functionality by running the provided examples from the `go-store` repository:\n\n1.  **Clone the repository**:\n\n```bash\ngit clone https://github.com/asaidimu/go-store/v3.git\ncd go-store\n```\n\n2.  **Run examples**:\n```bash\ngo run examples/basic/main.go\ngo run examples/intermediate/main.go\ngo run examples/advanced/main.go\n```\n\n### Basic Document Operations\n\nThe most common operations involve creating, reading, updating, and deleting documents. Documents are represented as a `store.Document` (which is a `map[string]any`).\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\t// 1. Initialize the Store\n\t// Always defer s.Close() to ensure resources are properly released.\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// 2. Insert a New Document\n\t// The Insert method returns the unique ID of the new document.\n\tdoc1 := store.Document{\"title\": \"My First Doc\", \"author\": \"Alice\"}\n\tid1, err := s.Insert(doc1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to insert document: %v\", err)\n\t}\n\tfmt.Printf(\"Inserted document with ID: %s\\n\", id1)\n\n\t// 3. Retrieve a Document by ID\n\t// Get returns a DocumentResult containing the ID, data, and version.\n\tretrievedDoc, err := s.Get(id1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to get document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Retrieved: ID=%s, Title='%s', Version=%d\\n\",\n\t\tretrievedDoc.ID, retrievedDoc.Data[\"title\"], retrievedDoc.Version)\n\n\t// 4. Update an Existing Document\n\t// Provide the ID and the new document data. Existing fields are replaced,\n\t// new fields are added, and fields not present in the new doc are removed.\n\tupdatedDoc1 := store.Document{\"title\": \"My First Doc (Revised)\", \"author\": \"Alice Smith\", \"pages\": 150}\n\terr = s.Update(id1, updatedDoc1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to update document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Updated document with ID: %s\\n\", id1)\n\n\t// Verify the update\n\tretrievedUpdatedDoc, err := s.Get(id1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to get updated document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Updated retrieved: ID=%s, Title='%s', Pages=%.0f, Version=%d\\n\",\n\t\tretrievedUpdatedDoc.ID, retrievedUpdatedDoc.Data[\"title\"], retrievedUpdatedDoc.Data[\"pages\"], retrievedUpdatedDoc.Version)\n\n\t// 5. Delete a Document\n\terr = s.Delete(id1)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to delete document %s: %v\", id1, err)\n\t}\n\tfmt.Printf(\"Deleted document with ID: %s\\n\", id1)\n\n\t// 6. Attempt to retrieve a deleted document (expected to fail)\n\t_, err = s.Get(id1)\n\tif err != nil {\n\t\tfmt.Printf(\"Attempted to get deleted document %s: %v (Expected error)\\n\", id1, err)\n\t}\n}\n",
+      "agentic": {
+        "decisionTrees": {
+          "initialize-store": {
+            "id": "decisionTree:initialize-store",
+            "question": "How to get started with go-store?",
+            "logic": "IF GO_ENVIRONMENT_SETUP THEN Install_go-store ELSE Setup_Go_environment",
+            "validationMethod": "Run basic example code successfully",
+            "related": {
+              "methods": ["method:NewStore"],
+              "patterns": ["pattern:Basic Document CRUD"]
+            }
+          }
+        },
+        "verificationChecklists": {
+          "installation-verification": [
+            "Check: `go get github.com/asaidimu/go-store/v3` completes without error.",
+            "Check: `go run examples/basic/main.go` executes successfully and prints expected output."
+          ]
+        },
+        "quickPatterns": {
+          "basic-init-and-close": {
+            "description": "Standard way to initialize the store and ensure resources are released.",
+            "code": "s := store.NewStore()\ndefer s.Close()",
+            "language": "go"
+          }
+        }
+      }
     },
     {
       "title": "Core Operations",
       "path": "core-operations.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Core Operations\"\ndescription: \"Core Operations documentation and guidance\"\n---\n\nThis section elaborates on the fundamental document management operations provided by `go-store`.\n\n### Initializing the Store\n\nBefore you can perform any operations, you must create a new store instance.\n\n```go\ns := store.NewStore()\ndefer s.Close() // Crucial for releasing resources\n```\n\nThe `NewStore()` function returns a pointer to a `Store` instance. It's vital to call `s.Close()` when your application no longer needs the store, typically using `defer`, to ensure all internal resources and memory are properly released, especially when the application exits or the store goes out of scope.\n\n### Inserting Documents\n\nThe `Insert` method adds a new document to the store. A unique ID is automatically generated for each document.\n\n```go\ndoc := store.Document{\"item\": \"Laptop\", \"price\": 1200.0, \"in_stock\": true}\nid, err := s.Insert(doc)\nif err != nil {\n    // Handle error, e.g., ErrInvalidDocument or ErrStoreClosed\n    log.Printf(\"Error inserting document: %v\", err)\n}\nfmt.Printf(\"Inserted document with ID: %s\\n\", id)\n```\n\n*   **Document Structure**: `store.Document` is a `map[string]any`, allowing for flexible, schemaless data.\n*   **Return Value**: Returns the generated `string` ID of the new document and an `error`.\n*   **Side Effects**: Increments the internal global version counter and triggers asynchronous updates to all existing indexes that might include the fields present in the new document.\n\n### Retrieving Documents\n\nThe `Get` method allows you to retrieve a document by its unique ID.\n\n```go\nretrievedDoc, err := s.Get(id)\nif err != nil {\n    // Handle error, e.g., ErrDocumentNotFound or ErrDocumentDeleted\n    log.Printf(\"Error retrieving document %s: %v\", id, err)\n} else {\n    fmt.Printf(\"Retrieved document version: %d, data: %v\\n\", retrievedDoc.Version, retrievedDoc.Data)\n}\n```\n\n*   **Return Value**: Returns a `*store.DocumentResult` containing the `ID`, a deep copy of the `Data`, and the `Version` of the document, or `nil` and an `error`.\n*   **Deep Copy**: The `Data` field in `DocumentResult` is a deep copy of the internal document state. This means you can modify `retrievedDoc.Data` without affecting the store's internal state.\n\n### Updating Documents\n\nTo modify an existing document, use the `Update` method with its ID and the new document data.\n\n```go\nupdatedData := store.Document{\"item\": \"Laptop Pro\", \"price\": 1500.0, \"status\": \"available\"}\nerr = s.Update(id, updatedData)\nif err != nil {\n    // Handle error, e.g., ErrDocumentNotFound or ErrInvalidDocument\n    log.Printf(\"Error updating document %s: %v\", id, err)\n}\n```\n\n*   **Behavior**: The `doc` provided completely replaces the existing document's data. If new fields are present, they are added. If existing fields are not in `updatedData`, they are removed. If fields present in `updatedData` are already in the document, their values are overwritten.\n*   **Optimistic Concurrency**: The store automatically increments the document's internal version. If multiple concurrent updates occur to the same document, `go-store`'s internal optimistic concurrency ensures that only one \"wins\" based on the internal locking mechanism, and the version reflects the total number of modifications.\n*   **Side Effects**: Updates the document's internal snapshot and increments its version. Triggers updates to all indexes if indexed fields have changed.\n\n### Deleting Documents\n\nThe `Delete` method permanently removes a document from the store.\n\n```go\nerr = s.Delete(id)\nif err != nil {\n    // Handle error, e.g., ErrDocumentNotFound\n    log.Printf(\"Error deleting document %s: %v\", id, err)\n}\n```\n\n*   **Idempotency**: Deleting a non-existent document will result in `ErrDocumentNotFound`.\n*   **Side Effects**: Removes the document from the main document map and from all associated indexes. Memory is released through garbage collection when the `DocumentSnapshot`'s reference count drops to zero.\n"
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Core Operations\"\ndescription: \"Core Operations documentation and guidance\"\n---\n\nThis section elaborates on the fundamental document management operations provided by `go-store`.\n\n### Initializing the Store\n\nBefore you can perform any operations, you must create a new store instance.\n\n```go\ns := store.NewStore()\ndefer s.Close() // Crucial for releasing resources\n```\n\nThe `NewStore()` function returns a pointer to a `Store` instance. It's vital to call `s.Close()` when your application no longer needs the store, typically using `defer`, to ensure all internal resources and memory are properly released, especially when the application exits or the store goes out of scope.\n\n### Inserting Documents\n\nThe `Insert` method adds a new document to the store. A unique ID is automatically generated for each document.\n\n```go\ndoc := store.Document{\"item\": \"Laptop\", \"price\": 1200.0, \"in_stock\": true}\nid, err := s.Insert(doc)\nif err != nil {\n    // Handle error, e.g., ErrInvalidDocument or ErrStoreClosed\n    log.Printf(\"Error inserting document: %v\", err)\n}\nfmt.Printf(\"Inserted document with ID: %s\\n\", id)\n```\n\n*   **Document Structure**: `store.Document` is a `map[string]any`, allowing for flexible, schemaless data.\n*   **Return Value**: Returns the generated `string` ID of the new document and an `error`.\n*   **Side Effects**: Increments the internal global version counter and triggers asynchronous updates to all existing indexes that might include the fields present in the new document.\n\n### Retrieving Documents\n\nThe `Get` method allows you to retrieve a document by its unique ID.\n\n```go\nretrievedDoc, err := s.Get(id)\nif err != nil {\n    // Handle error, e.g., ErrDocumentNotFound or ErrDocumentDeleted\n    log.Printf(\"Error retrieving document %s: %v\", id, err)\n} else {\n    fmt.Printf(\"Retrieved document version: %d, data: %v\\n\", retrievedDoc.Version, retrievedDoc.Data)\n}\n```\n\n*   **Return Value**: Returns a `*store.DocumentResult` containing the `ID`, a deep copy of the `Data`, and the `Version` of the document, or `nil` and an `error`.\n*   **Deep Copy**: The `Data` field in `DocumentResult` is a deep copy of the internal document state. This means you can modify `retrievedDoc.Data` without affecting the store's internal state.\n\n### Updating Documents\n\nTo modify an existing document, use the `Update` method with its ID and the new document data.\n\n```go\nupdatedData := store.Document{\"item\": \"Laptop Pro\", \"price\": 1500.0, \"status\": \"available\"}\nerr = s.Update(id, updatedData)\nif err != nil {\n    // Handle error, e.g., ErrDocumentNotFound or ErrInvalidDocument\n    log.Printf(\"Error updating document %s: %v\", id, err)\n}\n```\n\n*   **Behavior**: The `doc` provided completely replaces the existing document's data. If new fields are present, they are added. If existing fields are not in `updatedData`, they are removed. If fields present in `updatedData` are already in the document, their values are overwritten.\n*   **Optimistic Concurrency**: The store automatically increments the document's internal version. If multiple concurrent updates occur to the same document, `go-store`'s internal optimistic concurrency ensures that only one \"wins\" based on the internal locking mechanism, and the version reflects the total number of modifications.\n*   **Side Effects**: Updates the document's internal snapshot and increments its version. Triggers updates to all indexes if indexed fields have changed.\n\n### Deleting Documents\n\nThe `Delete` method permanently removes a document from the store.\n\n```go\nerr = s.Delete(id)\nif err != nil {\n    // Handle error, e.g., ErrDocumentNotFound\n    log.Printf(\"Error deleting document %s: %v\", id, err)\n}\n```\n\n*   **Idempotency**: Deleting a non-existent document will result in `ErrDocumentNotFound`.\n*   **Side Effects**: Removes the document from the main document map and from all associated indexes. Memory is released through garbage collection when the `DocumentSnapshot`'s reference count drops to zero.\n",
+      "agentic": {
+        "decisionTrees": {
+          "document-crud-flow": {
+            "id": "decisionTree:document-crud-flow",
+            "question": "How to manage documents (CRUD) in go-store?",
+            "logic": "IF goal_is_insert THEN Use_s.Insert() ELSE IF goal_is_retrieve THEN Use_s.Get(id) ELSE IF goal_is_update THEN Use_s.Update(id, new_doc) ELSE IF goal_is_delete THEN Use_s.Delete(id)",
+            "validationMethod": "Check return values and subsequent Get operations.",
+            "related": {
+              "methods": ["method:Insert", "method:Get", "method:Update", "method:Delete"],
+              "patterns": ["pattern:Basic Document CRUD"]
+            }
+          }
+        },
+        "verificationChecklists": {
+          "insert-verification": [
+            "Check: `Insert` returns a non-empty ID.",
+            "Check: `Get` with the returned ID retrieves the exact original data.",
+            "Check: Retrieved document version is 1."
+          ],
+          "update-verification": [
+            "Check: `Update` returns `nil` error.",
+            "Check: `Get` after update retrieves the new data.",
+            "Check: Retrieved document version is incremented."
+          ],
+          "delete-verification": [
+            "Check: `Delete` returns `nil` error.",
+            "Check: `Get` after delete returns `ErrDocumentNotFound`."
+          ]
+        },
+        "quickPatterns": {
+          "insert-document": {
+            "description": "Template for inserting a new document.",
+            "code": "doc := store.Document{\"key\": \"value\"}\nid, err := s.Insert(doc)",
+            "language": "go"
+          },
+          "get-document": {
+            "description": "Template for retrieving a document by ID.",
+            "code": "retrievedDoc, err := s.Get(id)",
+            "language": "go"
+          },
+          "update-document": {
+            "description": "Template for updating an existing document.",
+            "code": "updatedData := store.Document{\"new_key\": \"new_value\"}\nerr = s.Update(id, updatedData)",
+            "language": "go"
+          },
+          "delete-document": {
+            "description": "Template for deleting a document.",
+            "code": "err = s.Delete(id)",
+            "language": "go"
+          }
+        }
+      }
     },
     {
       "title": "Task-Based Guide",
       "path": "task-based-guide.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Task-Based Guide\"\ndescription: \"Task-Based Guide documentation and guidance\"\n---\n\nThis section focuses on common tasks you'll perform with `go-store` beyond basic CRUD operations.\n\n### Indexing and Querying Data\n\nIndexes are essential for efficient data retrieval, especially for large datasets. `go-store` supports B-tree based indexes on single or composite fields.\n\n#### Creating an Index\n\nUse `s.CreateIndex` to define a new index. You provide a unique name for the index and a slice of field names (`[]string`) on which the index should be built.\n\n```go\n// Create a single-field index on 'city'\nerr := s.CreateIndex(\"by_city\", []string{\"city\"})\nif err != nil {\n    log.Fatalf(\"Failed to create by_city index: %v\", err)\n}\nfmt.Println(\"Index 'by_city' created.\")\n\n// Create a composite index on 'product' and 'category'\nerr = s.CreateIndex(\"by_product_category\", []string{\"product\", \"category\"})\nif err != nil {\n    log.Fatalf(\"Failed to create by_product_category index: %v\", err)\n}\nfmt.Println(\"Index 'by_product_category' created.\")\n\n// Documents inserted after index creation will automatically be added to the index.\n// Existing documents are also populated into the index upon creation.\n_, _ = s.Insert(store.Document{\"name\": \"Alice\", \"city\": \"New York\", \"product\": \"Book\", \"category\": \"Fiction\"})\n_, _ = s.Insert(store.Document{\"name\": \"Bob\", \"city\": \"London\", \"product\": \"Laptop\", \"category\": \"Electronics\"})\n_, _ = s.Insert(store.Document{\"name\": \"Charlie\", \"city\": \"New York\", \"product\": \"Book\", \"category\": \"Education\"})\n```\n\n*   **`indexName`**: Must be unique within the store. Attempting to create an index with an existing name will return `ErrIndexExists`.\n*   **`fields`**: A slice of strings specifying the document fields to index. The order matters for composite indexes as it defines the sorting order in the B-tree. An empty `fields` slice will result in `ErrEmptyIndex`.\n\n#### Performing Exact Lookups\n\nUse `s.Lookup` to find documents that exactly match specific values on an indexed field (or composite fields).\n\n```go\nfmt.Println(\"\\nDocuments in New York:\")\nnyDocs, err := s.Lookup(\"by_city\", []any{\"New York\"})\nif err != nil {\n    log.Fatalf(\"Lookup by_city failed: %v\", err)\n}\nfor _, doc := range nyDocs {\n    fmt.Printf(\"  ID: %s, Name: %s\\n\", doc.ID, doc.Data[\"name\"])\n}\n\nfmt.Println(\"\\nBooks in Fiction category:\")\nbookFictionDocs, err := s.Lookup(\"by_product_category\", []any{\"Book\", \"Fiction\"})\nif err != nil {\n    log.Fatalf(\"Lookup by_product_category failed: %v\", err)\n}\nfor _, doc := range bookFictionDocs {\n    fmt.Printf(\"  ID: %s, Name: %s\\n\", doc.ID, doc.Data[\"name\"])\n}\n```\n\n*   **`values`**: A slice of `any` matching the number and order of `fields` specified during index creation. For a single-field index like `by_city`, you'd pass `[]any{\"New York\"}`.\n\n#### Performing Range Queries\n\nFor numerical or comparable string fields, `s.LookupRange` allows you to retrieve documents within a specified range.\n\n```go\nerr = s.CreateIndex(\"by_age\", []string{\"age\"})\nif err != nil {\n    log.Fatalf(\"Failed to create by_age index: %v\", err)\n}\n\n_, _ = s.Insert(store.Document{\"name\": \"David\", \"age\": 28})\n_, _ = s.Insert(store.Document{\"name\": \"Eve\", \"age\": 30})\n_, _ = s.Insert(store.Document{\"name\": \"Frank\", \"age\": 32})\n\nfmt.Println(\"\\nDocuments with age between 27 and 32 (inclusive):\")\nageRangeDocs, err := s.LookupRange(\"by_age\", []any{27}, []any{32})\nif err != nil {\n    log.Fatalf(\"Lookup age range failed: %v\", err)\n}\nfor _, doc := range ageRangeDocs {\n    fmt.Printf(\"  ID: %s, Name: %s, Age: %.0f\\n\", doc.ID, doc.Data[\"name\"], doc.Data[\"age\"])\n}\n```\n\n*   **`minValues`, `maxValues`**: Slices of `any` defining the lower and upper bounds of the range. Both bounds are inclusive. Like `Lookup`, the order and count of values must match the index's `fields`.\n\n#### Dropping an Index\n\nIf an index is no longer needed, you can remove it using `s.DropIndex`.\n\n```go\nerr = s.DropIndex(\"by_city\")\nif err != nil {\n    log.Fatalf(\"Failed to drop by_city index: %v\", err)\n}\nfmt.Println(\"Index 'by_city' dropped successfully.\")\n```\n\n*   **Side Effects**: The index and its associated memory will be released. Attempting to drop a non-existent index will return `ErrIndexNotFound`.\n\n### Streaming Documents\n\nFor iterating over all documents in the store, `s.Stream` provides an efficient, channel-based mechanism. It returns a `*store.DocumentStream` which can be consumed using its `Next()` method.\n\n```go\nfmt.Println(\"\\nStreaming all documents:\")\n// Create a stream with a buffer size (e.g., 10 for demonstration). \n// A larger buffer can improve performance for high-throughput scenarios.\ndocStream := s.Stream(10)\ndefer docStream.Close() // Ensure the stream is closed to release resources\n\nfor {\n    docResult, err := docStream.Next()\n    if err != nil {\n        // ErrStreamClosed indicates the stream has finished or was cancelled.\n        if err == store.ErrStreamClosed { break }\n        log.Fatalf(\"Stream error: %v\", err)\n    }\n    fmt.Printf(\"  Streamed: ID=%s, Name=%s, Age=%.0f\\n\", \n               docResult.ID, docResult.Data[\"name\"], docResult.Data[\"age\"])\n}\nfmt.Printf(\"Total streamed documents: %d\\n\", count)\n```\n\n*   **Snapshot Consistency**: When `Stream` is called, it captures a snapshot of the documents currently in the store. Subsequent modifications (inserts, updates, deletes) to the store will *not* affect the documents being streamed.\n*   **Buffer Size**: The `bufferSize` parameter affects the capacity of the internal Go channel used for streaming. A non-zero buffer can improve performance by allowing documents to be pushed ahead of consumption, especially when the consumer is slower than the producer. A `bufferSize` of `0` creates an unbuffered channel.\n*   **Cancellation**: The `DocumentStream` includes an internal `context.Context` which can be cancelled by calling `docStream.Close()`. This is crucial for stopping iteration early and releasing resources if you don't need to consume all documents.\n*   **Error Handling**: `Next()` will return `store.ErrStreamClosed` when all documents have been streamed or if the stream was explicitly closed. Other errors might indicate underlying issues (e.g., context cancellation).\n"
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Task-Based Guide\"\ndescription: \"Task-Based Guide documentation and guidance\"\n---\n\nThis section focuses on common tasks you'll perform with `go-store` beyond basic CRUD operations.\n\n### Indexing and Querying Data\n\nIndexes are essential for efficient data retrieval, especially for large datasets. `go-store` supports B-tree based indexes on single or composite fields.\n\n#### Creating an Index\n\nUse `s.CreateIndex` to define a new index. You provide a unique name for the index and a slice of field names (`[]string`) on which the index should be built.\n\n```go\n// Create a single-field index on 'city'\nerr := s.CreateIndex(\"by_city\", []string{\"city\"})\nif err != nil {\n    log.Fatalf(\"Failed to create by_city index: %v\", err)\n}\nfmt.Println(\"Index 'by_city' created.\")\n\n// Create a composite index on 'product' and 'category'\nerr = s.CreateIndex(\"by_product_category\", []string{\"product\", \"category\"})\nif err != nil {\n    log.Fatalf(\"Failed to create by_product_category index: %v\", err)\n}\nfmt.Println(\"Index 'by_product_category' created.\")\n\n// Documents inserted after index creation will automatically be added to the index.\n// Existing documents are also populated into the index upon creation.\n_, _ = s.Insert(store.Document{\"name\": \"Alice\", \"city\": \"New York\", \"product\": \"Book\", \"category\": \"Fiction\"})\n_, _ = s.Insert(store.Document{\"name\": \"Bob\", \"city\": \"London\", \"product\": \"Laptop\", \"category\": \"Electronics\"})\n_, _ = s.Insert(store.Document{\"name\": \"Charlie\", \"city\": \"New York\", \"product\": \"Book\", \"category\": \"Education\"})\n```\n\n*   **`indexName`**: Must be unique within the store. Attempting to create an index with an existing name will return `ErrIndexExists`.\n*   **`fields`**: A slice of strings specifying the document fields to index. The order matters for composite indexes as it defines the sorting order in the B-tree. An empty `fields` slice will result in `ErrEmptyIndex`.\n\n#### Performing Exact Lookups\n\nUse `s.Lookup` to find documents that exactly match specific values on an indexed field (or composite fields).\n\n```go\nfmt.Println(\"\\nDocuments in New York:\")\nnyDocs, err := s.Lookup(\"by_city\", []any{\"New York\"})\nif err != nil {\n    log.Fatalf(\"Lookup by_city failed: %v\", err)\n}\nfor _, doc := range nyDocs {\n    fmt.Printf(\"  ID: %s, Name: %s\\n\", doc.ID, doc.Data[\"name\"])\n}\n\nfmt.Println(\"\\nBooks in Fiction category:\")\nbookFictionDocs, err := s.Lookup(\"by_product_category\", []any{\"Book\", \"Fiction\"})\nif err != nil {\n    log.Fatalf(\"Lookup by_product_category failed: %v\", err)\n}\nfor _, doc := range bookFictionDocs {\n    fmt.Printf(\"  ID: %s, Name: %s\\n\", doc.ID, doc.Data[\"name\"])\n}\n```\n\n*   **`values`**: A slice of `any` matching the number and order of `fields` specified during index creation. For a single-field index like `by_city`, you'd pass `[]any{\"New York\"}`.\n\n#### Performing Range Queries\n\nFor numerical or comparable string fields, `s.LookupRange` allows you to retrieve documents within a specified range.\n\n```go\nerr = s.CreateIndex(\"by_age\", []string{\"age\"})\nif err != nil {\n    log.Fatalf(\"Failed to create by_age index: %v\", err)\n}\n\n_, _ = s.Insert(store.Document{\"name\": \"David\", \"age\": 28})\n_, _ = s.Insert(store.Document{\"name\": \"Eve\", \"age\": 30})\n_, _ = s.Insert(store.Document{\"name\": \"Frank\", \"age\": 32})\n\nfmt.Println(\"\\nDocuments with age between 27 and 32 (inclusive):\")\nageRangeDocs, err := s.LookupRange(\"by_age\", []any{27}, []any{32})\nif err != nil {\n    log.Fatalf(\"Lookup age range failed: %v\", err)\n}\nfor _, doc := range ageRangeDocs {\n    fmt.Printf(\"  ID: %s, Name: %s, Age: %.0f\\n\", doc.ID, doc.Data[\"name\"], doc.Data[\"age\"])\n}\n```\n\n*   **`minValues`, `maxValues`**: Slices of `any` defining the lower and upper bounds of the range. Both bounds are inclusive. Like `Lookup`, the order and count of values must match the index's `fields`.\n\n#### Dropping an Index\n\nIf an index is no longer needed, you can remove it using `s.DropIndex`.\n\n```go\nerr = s.DropIndex(\"by_city\")\nif err != nil {\n    log.Fatalf(\"Failed to drop by_city index: %v\", err)\n}\nfmt.Println(\"Index 'by_city' dropped successfully.\")\n```\n\n*   **Side Effects**: The index and its associated memory will be released. Attempting to drop a non-existent index will return `ErrIndexNotFound`.\n\n### Streaming Documents\n\nFor iterating over all documents in the store, `s.Stream` provides an efficient, channel-based mechanism. It returns a `*store.DocumentStream` which can be consumed using its `Next()` method.\n\n```go\nfmt.Println(\"\\nStreaming all documents:\")\n// Create a stream with a buffer size (e.g., 10 for demonstration). \n// A larger buffer can improve performance for high-throughput scenarios.\ndocStream := s.Stream(10)\ndefer docStream.Close() // Ensure the stream is closed to release resources\n\nfor {\n    docResult, err := docStream.Next()\n    if err != nil {\n        // ErrStreamClosed indicates the stream has finished or was cancelled.\n        if err == store.ErrStreamClosed { break }\n        log.Fatalf(\"Stream error: %v\", err)\n    }\n    fmt.Printf(\"  Streamed: %s\\n\", docResult.Data[\"item\"])\n    count++\n}\nfmt.Printf(\"Total streamed documents: %d\\n\", count)\n```\n\n*   **Snapshot Consistency**: When `Stream` is called, it captures a snapshot of the documents currently in the store. Subsequent modifications (inserts, updates, deletes) to the store will *not* affect the documents being streamed.\n*   **Buffer Size**: The `bufferSize` parameter affects the capacity of the internal Go channel used for streaming. A non-zero buffer can improve performance by allowing documents to be pushed ahead of consumption, especially when the consumer is slower than the producer. A `bufferSize` of `0` creates an unbuffered channel.\n*   **Cancellation**: The `DocumentStream` includes an internal `context.Context` which can be cancelled by calling `docStream.Close()`. This is crucial for stopping iteration early and releasing resources if you don't need to consume all documents.\n*   **Error Handling**: `Next()` will return `store.ErrStreamClosed` when all documents have been streamed or if the stream was explicitly closed. Other errors might indicate underlying issues (e.g., context cancellation).\n",
+      "agentic": {
+        "decisionTrees": {
+          "index-and-query": {
+            "id": "decisionTree:index-and-query",
+            "question": "How to efficiently query data in go-store?",
+            "logic": "IF data_needs_fast_lookup AND index_not_exists THEN CreateIndex(name, fields) ELSE IF needs_exact_match THEN Lookup(index, values) ELSE IF needs_range_match THEN LookupRange(index, min, max) ELSE IF index_no_longer_needed THEN DropIndex(name) ELSE Stream_all_documents",
+            "validationMethod": "Verify query results or confirm index removal.",
+            "related": {
+              "methods": ["method:CreateIndex", "method:Lookup", "method:LookupRange", "method:DropIndex", "method:Stream"],
+              "patterns": ["pattern:Indexed Lookup", "pattern:Streaming Documents"]
+            }
+          }
+        },
+        "verificationChecklists": {
+          "create-index-verification": [
+            "Check: `CreateIndex` returns `nil` error.",
+            "Check: Subsequent `Lookup` on the index returns expected documents.",
+            "Check: Attempting to create index with same name returns `ErrIndexExists`."
+          ],
+          "lookup-verification": [
+            "Check: `Lookup` returns correct number of documents.",
+            "Check: Returned documents contain expected data for the queried values."
+          ],
+          "lookup-range-verification": [
+            "Check: `LookupRange` returns documents within the specified min/max bounds (inclusive).",
+            "Check: Order of values for composite index matches query order."
+          ],
+          "drop-index-verification": [
+            "Check: `DropIndex` returns `nil` error.",
+            "Check: Subsequent `Lookup` on the dropped index returns `ErrIndexNotFound`."
+          ],
+          "stream-documents-verification": [
+            "Check: `Stream` returns `*DocumentStream`.",
+            "Check: `DocumentStream.Next()` iterates through all expected documents.",
+            "Check: `DocumentStream.Next()` eventually returns `ErrStreamClosed`.",
+            "Check: `DocumentStream.Close()` correctly terminates the stream."
+          ]
+        },
+        "quickPatterns": {
+          "create-index": {
+            "description": "Template for creating a single or composite index.",
+            "code": "err := s.CreateIndex(\"my_index\", []string{\"field1\", \"field2\"})",
+            "language": "go"
+          },
+          "lookup-exact": {
+            "description": "Template for performing an exact match lookup on an index.",
+            "code": "results, err := s.Lookup(\"my_index\", []any{\"value1\", \"value2\"})",
+            "language": "go"
+          },
+          "lookup-range": {
+            "description": "Template for performing a range query on an index.",
+            "code": "results, err := s.LookupRange(\"my_index\", []any{minVal}, []any{maxVal})",
+            "language": "go"
+          },
+          "drop-index": {
+            "description": "Template for removing an index.",
+            "code": "err := s.DropIndex(\"my_index\")",
+            "language": "go"
+          },
+          "stream-documents": {
+            "description": "Template for streaming all documents from the store.",
+            "code": "stream := s.Stream(10)\ndefer stream.Close()\nfor { doc, err := stream.Next(); if err != nil { break }; // Process doc }",
+            "language": "go"
+          }
+        }
+      }
     },
     {
       "title": "Advanced Usage",
       "path": "advanced-usage.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Advanced Usage\"\ndescription: \"Advanced Usage documentation and guidance\"\n---\n# Advanced Usage\n\n## Advanced Usage\n\nThis section delves into more complex scenarios, including concurrent operations and internal design considerations that impact how you use `go-store`.\n\n### Concurrent Operations\n\n`go-store` is designed to be highly concurrent and thread-safe. Multiple goroutines can safely interact with the store simultaneously. This is achieved through a combination of `sync.RWMutex` for overall store management, `atomic.Pointer` for atomic document state transitions, and reference counting for memory safety.\n\n#### Concurrent Updates to a Single Document\n\nWhen multiple goroutines attempt to update the same document, `go-store` ensures atomicity and consistency through its optimistic concurrency control. Each successful update increments the document's version.\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"sync\"\n\t\"time\"\n\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tid, _ := s.Insert(store.Document{\"name\": \"Item\", \"count\": 0})\n\tfmt.Printf(\"Initial document ID: %s\\n\", id)\n\n\tvar wg sync.WaitGroup\n\tconst numConcurrentUpdates = 100\n\n\tfmt.Printf(\"\\nPerforming %d concurrent increments on document %s...\\n\", numConcurrentUpdates, id)\n\tfor i := 0; i < numConcurrentUpdates; i++ {\n\t\twg.Add(1)\n\t\tgo func(iteration int) {\n\t\t\tdefer wg.Done()\n\t\t\t// In a real application, you might read-modify-write, but here we just update\n\t\t\t// with a new value for simplicity of demonstrating concurrency safety.\n\t\t\t// The internal versioning ensures consistency.\n\t\t\terr := s.Update(id, store.Document{\"name\": \"Item\", \"count\": iteration + 1})\n\t\t\tif err != nil {\n\t\t\t\t// ErrDocumentNotFound can occur if another goroutine deletes it first.\n\t\t\t\tfmt.Printf(\"Concurrent update %d failed for %s: %v\\n\", iteration+1, id, err)\n\t\t\t}\n\t\t}(i)\n\t}\n\twg.Wait()\n\tfmt.Println(\"Concurrent updates finished.\")\n\n\t// Verify the final state\n\tfinalDoc, err := s.Get(id)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to get final document after concurrent updates: %v\", err)\n\t}\n\tfmt.Printf(\"Final document state: ID=%s, Name='%s', Count=%.0f, Version=%d\\n\",\n\t\tfinalDoc.ID, finalDoc.Data[\"name\"], finalDoc.Data[\"count\"], finalDoc.Version)\n\n\t// Note: The 'count' might not be 'numConcurrentUpdates' if the goroutines \n\t// overwrite each other's values, but the 'Version' will accurately reflect \n\t// the total number of successful updates (+1 for initial insert).\n\tif finalDoc.Version != uint64(numConcurrentUpdates+1) {\n\t\tfmt.Printf(\"Warning: Expected version %d, got %d. (Async updates can cause non-sequential versions from a single goroutine's perspective, but total versions should be correct).\\n\", numConcurrentUpdates+1, finalDoc.Version)\n\t}\n}\n```\n\n#### Concurrent Inserts and Deletes\n\nMultiple goroutines can insert and delete documents without interference. The store's internal locking ensures that operations on the document map and indexes are safe.\n\n### Understanding Concurrency Control and Memory Management\n\n`go-store`'s robustness stems from its internal mechanisms:\n\n*   **`DocumentSnapshot`**: When a document is updated, a new `DocumentSnapshot` is created. This snapshot contains the new data and an incremented version. The old snapshot is not immediately garbage collected.\n*   **Reference Counting (`refCount`)**: Each `DocumentSnapshot` has a reference count. When a `DocumentHandle` (the main pointer to a document) or a query (`Get`, `Stream`, `Lookup`) reads a snapshot, its `refCount` is incremented. When the `DocumentHandle` points to a new snapshot, or a query finishes using it, the `refCount` is decremented. A snapshot's data is cleared only when its `refCount` drops to zero, allowing safe memory management in highly concurrent environments.\n*   **`atomic.Pointer`**: Used within `DocumentHandle` to atomically swap pointers to `DocumentSnapshot`s, ensuring that reads always get a consistent, complete snapshot of the document without needing to lock for every read operation.\n*   **`sync.RWMutex`**: Used at higher levels (e.g., `Store`'s `documents` and `indexes` maps, `fieldIndex`'s B-tree) to protect structural changes (like adding/removing documents or indexes) and ensure read-write consistency.\n\n### Importance of `Close()` Method\n\nIt is critical to call `store.Close()` on the `Store` instance when it's no longer needed, typically when your application is shutting down. This method performs several cleanup tasks:\n\n*   Marks the store as closed, preventing any further operations and returning `ErrStoreClosed`.\n*   Clears internal maps (`documents` and `indexes`). This assists the Go garbage collector in reclaiming memory more quickly, especially for large datasets.\n*   Ensures all internal `DocumentSnapshot`s eventually have their reference counts drop to zero, allowing their associated memory to be reclaimed.\n\n**Anti-Pattern**: Forgetting to call `Close()` can lead to memory leaks in long-running applications, as internal maps and document references might persist longer than necessary, delaying garbage collection.\n\n### Data Copying Behavior\n\n`go-store` employs deep copying for documents when they are inserted into or retrieved from the store.\n\n*   **`Insert` and `Update`**: When you pass a `store.Document` to `Insert` or `Update`, a deep copy of that `map[string]any` (including nested maps and slices) is made. This ensures that modifications to your original `Document` variable outside the store do not inadvertently affect the store's internal data, and vice-versa.\n*   **`Get` and `Stream`**: The `DocumentResult.Data` field returned by `Get` and `DocumentStream.Next()` is also a deep copy. This means you are free to modify the returned `DocumentResult.Data` map and its nested contents without impacting the actual data stored in the `go-store` instance. This guarantees snapshot isolation for read operations.\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"reflect\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tnestedDoc := store.Document{\"value\": 1, \"list\": []string{\"a\", \"b\"}}\n\toriginalDoc := store.Document{\n\t\t\"id\":      \"my_doc\",\n\t\t\"data\":    nestedDoc,\n\t\t\"tags\":    []any{\"tag1\", \"tag2\"},\n\t}\n\n\tid, _ := s.Insert(originalDoc);\n\n\t// Retrieve the document\n\tretrievedDoc, _ := s.Get(id)\n\n\t// Modify the retrieved deep copy\n\tretrievedDoc.Data[\"data\"].(store.Document)[\"value\"] = 99\n\tretrievedDoc.Data[\"tags\"].([]any)[0] = \"new_tag1\"\n\tfmt.Printf(\"Modified retrieved copy: %v\\n\", retrievedDoc.Data)\n\n\t// Get the document again to verify original state in store\n\toriginalStateDoc, _ := s.Get(id)\n\tfmt.Printf(\"Original state in store: %v\\n\", originalStateDoc.Data)\n\n\tif originalStateDoc.Data[\"data\"].(store.Document)[\"value\"] == 1 && \n\t   originalStateDoc.Data[\"tags\"].([]any)[0] == \"a\" {\n\t\tfmt.Println(\"\\nVerification successful: Original data in store was not affected.\")\n\t} else {\n\t\tfmt.Println(\"\\nVerification FAILED: Original data in store was unexpectedly affected.\")\n\t}\n\n\t// Demonstrate with initial doc\n\toriginalDoc[\"data\"].(store.Document)[\"value\"] = 500 // Modify original input\n\tfmt.Printf(\"Original input after modification: %v\\n\", originalDoc)\n\n\toriginalStateDoc2, _ := s.Get(id)\n\tif originalStateDoc2.Data[\"data\"].(store.Document)[\"value\"] == 1 {\n\t\tfmt.Println(\"Original input modification did NOT affect stored data.\")\n\t} else {\n\t\tfmt.Println(\"Original input modification DID affect stored data.\")\n\t}\n}\n"
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Advanced Usage\"\ndescription: \"Advanced Usage documentation and guidance\"\n---\n# Advanced Usage\n\n## Advanced Usage\n\nThis section delves into more complex scenarios, including concurrent operations and internal design considerations that impact how you use `go-store`.\n\n### Concurrent Operations\n\n`go-store` is designed to be highly concurrent and thread-safe. Multiple goroutines can safely interact with the store simultaneously. This is achieved through a combination of `sync.RWMutex` for overall store management, `atomic.Pointer` for atomic document state transitions, and reference counting for memory safety.\n\n#### Concurrent Updates to a Single Document\n\nWhen multiple goroutines attempt to update the same document, `go-store` ensures atomicity and consistency through its optimistic concurrency control. Each successful update increments the document's version.\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"sync\"\n\t\"time\"\n\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tid, _ := s.Insert(store.Document{\"name\": \"Item\", \"count\": 0})\n\tfmt.Printf(\"Initial document ID: %s\\n\", id)\n\n\tvar wg sync.WaitGroup\n\tconst numConcurrentUpdates = 100\n\n\tfmt.Printf(\"\\nPerforming %d concurrent increments on document %s...\\n\", numConcurrentUpdates, id)\n\tfor i := 0; i < numConcurrentUpdates; i++ {\n\t\twg.Add(1)\n\t\tgo func(iteration int) {\n\t\t\tdefer wg.Done()\n\t\t\t// In a real application, you might read-modify-write, but here we just update\n\t\t\t// with a new value for simplicity of demonstrating concurrency safety.\n\t\t\t// The internal versioning ensures consistency.\n\t\t\terr := s.Update(id, store.Document{\"name\": \"Item\", \"count\": iteration + 1})\n\t\t\tif err != nil {\n\t\t\t\t// ErrDocumentNotFound can occur if another goroutine deletes it first.\n\t\t\t\tfmt.Printf(\"Concurrent update %d failed for %s: %v\\n\", iteration+1, id, err)\n\t\t\t}\n\t\t}(i)\n\t}\n\twg.Wait()\n\tfmt.Println(\"Concurrent updates finished.\")\n\n\t// Verify the final state\n\tfinalDoc, err := s.Get(id)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to get final document after concurrent updates: %v\", err)\n\t}\n\tfmt.Printf(\"Final document state: ID=%s, Name='%s', Count=%.0f, Version=%d\\n\",\n\t\tfinalDoc.ID, finalDoc.Data[\"name\"], finalDoc.Data[\"count\"], finalDoc.Version)\n\n\t// Note: The 'count' might not be 'numConcurrentUpdates' if the goroutines \n\t// overwrite each other's values, but the 'Version' will accurately reflect \n\t// the total number of successful updates (+1 for initial insert).\n\tif finalDoc.Version != uint64(numConcurrentUpdates+1) {\n\t\tfmt.Printf(\"Warning: Expected version %d, got %d. (Async updates can cause non-sequential versions from a single goroutine's perspective, but total versions should be correct).\\n\", numConcurrentUpdates+1, finalDoc.Version)\n\t}\n}\n```\n\n#### Concurrent Inserts and Deletes\n\nMultiple goroutines can insert and delete documents without interference. The store's internal locking ensures that operations on the document map and indexes are safe.\n\n### Understanding Concurrency Control and Memory Management\n\n`go-store`'s robustness stems from its internal mechanisms:\n\n*   **`DocumentSnapshot`**: When a document is updated, a new `DocumentSnapshot` is created. This snapshot contains the new data and an incremented version. The old snapshot is not immediately garbage collected.\n*   **Reference Counting (`refCount`)**: Each `DocumentSnapshot` has a reference count. When a `DocumentHandle` (the main pointer to a document) or a query (`Get`, `Stream`, `Lookup`) reads a snapshot, its `refCount` is incremented. When the `DocumentHandle` points to a new snapshot, or a query finishes using it, the `refCount` is decremented. A snapshot's data is cleared only when its `refCount` drops to zero, allowing safe memory management in highly concurrent environments.\n*   **`atomic.Pointer`**: Used within `DocumentHandle` to atomically swap pointers to `DocumentSnapshot`s, ensuring that reads always get a consistent, complete snapshot of the document without needing to lock for every read operation.\n*   **`sync.RWMutex`**: Used at higher levels (e.g., `Store`'s `documents` and `indexes` maps, `fieldIndex`'s B-tree) to protect structural changes (like adding/removing documents or indexes) and ensure read-write consistency.\n\n### Importance of `Close()` Method\n\nIt is critical to call `store.Close()` on the `Store` instance when it's no longer needed, typically when your application is shutting down. This method performs several cleanup tasks:\n\n*   Marks the store as closed, preventing any further operations and returning `ErrStoreClosed`.\n*   Clears internal maps (`documents` and `indexes`). This assists the Go garbage collector in reclaiming memory more quickly, especially for large datasets.\n*   Ensures all internal `DocumentSnapshot`s eventually have their reference counts drop to zero, allowing their associated memory to be reclaimed.\n\n**Anti-Pattern**: Forgetting to call `Close()` can lead to memory leaks in long-running applications, as internal maps and document references might persist longer than necessary, delaying garbage collection.\n\n### Data Copying Behavior\n\n`go-store` employs deep copying for documents when they are inserted into or retrieved from the store.\n\n*   **`Insert` and `Update`**: When you pass a `store.Document` to `Insert` or `Update`, a deep copy of that `map[string]any` (including nested maps and slices) is made. This ensures that modifications to your original `Document` variable outside the store do not inadvertently affect the store's internal data, and vice-versa.\n*   **`Get` and `Stream`**: The `DocumentResult.Data` field returned by `Get` and `DocumentStream.Next()` is also a deep copy. This means you are free to modify the returned `DocumentResult.Data` map and its nested contents without impacting the actual data stored in the `go-store` instance. This guarantees snapshot isolation for read operations.\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"reflect\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tnestedDoc := store.Document{\"value\": 1, \"list\": []string{\"a\", \"b\"}}\n\toriginalDoc := store.Document{\n\t\t\"id\":      \"my_doc\",\n\t\t\"data\":    nestedDoc,\n\t\t\"tags\":    []any{\"tag1\", \"tag2\"},\n\t}\n\n\tid, _ := s.Insert(originalDoc);\n\n\t// Retrieve the document\n\tretrievedDoc, _ := s.Get(id)\n\n\t// Modify the retrieved deep copy\n\tretrievedDoc.Data[\"data\"].(store.Document)[\"value\"] = 99\n\tretrievedDoc.Data[\"tags\"].([]any)[0] = \"new_tag1\"\n\tfmt.Printf(\"Modified retrieved copy: %v\\n\", retrievedDoc.Data)\n\n\t// Get the document again to verify original state in store\n\toriginalStateDoc, _ := s.Get(id)\n\tfmt.Printf(\"Original state in store: %v\\n\", originalStateDoc.Data)\n\n\tif originalStateDoc.Data[\"data\"].(store.Document)[\"value\"] == 1 && \n\t   originalStateDoc.Data[\"tags\"].([]any)[0] == \"a\" {\n\t\tfmt.Println(\"\\nVerification successful: Original data in store was not affected.\")\n\t} else {\n\t\tfmt.Println(\"\\nVerification FAILED: Original data in store was unexpectedly affected.\")\n\t}\n\n\t// Demonstrate with initial doc\n\toriginalDoc[\"data\"].(store.Document)[\"value\"] = 500 // Modify original input\n\tfmt.Printf(\"Original input after modification: %v\\n\", originalDoc)\n\n\toriginalStateDoc2, _ := s.Get(id)\n\tif originalStateDoc2.Data[\"data\"].(store.Document)[\"value\"] == 1 {\n\t\tfmt.Println(\"Original input modification did NOT affect stored data.\")\n\t} else {\n\t\tfmt.Println(\"Original input modification DID affect stored data.\")\n\t}\n}\n",
+      "agentic": {
+        "decisionTrees": {
+          "handling-concurrency": {
+            "id": "decisionTree:handling-concurrency",
+            "question": "How to handle concurrent operations in go-store?",
+            "logic": "IF concurrent_writes_to_same_doc THEN Use_s.Update()_safely_due_to_optimistic_concurrency ELSE IF concurrent_inserts_or_deletes THEN Perform_operations_directly_as_store_is_thread-safe",
+            "validationMethod": "Run concurrent examples and verify final state and version counts.",
+            "related": {
+              "methods": ["method:Update", "method:Insert", "method:Delete"],
+              "patterns": ["pattern:Concurrent Update Pattern"]
+            }
+          }
+        },
+        "verificationChecklists": {
+          "concurrency-update-verification": [
+            "Check: Final document version equals (initial_version + total_updates).",
+            "Check: No data corruption observed after concurrent writes.",
+            "Check: `ErrDocumentNotFound` is correctly handled for concurrent deletes."
+          ],
+          "deep-copy-verification": [
+            "Check: Modifying `DocumentResult.Data` does not alter original document in store.",
+            "Check: Modifying original input `store.Document` after `Insert`/`Update` does not alter stored data."
+          ]
+        },
+        "quickPatterns": {
+          "concurrent-update": {
+            "description": "Demonstrates safe concurrent updates to a single document.",
+            "code": "var wg sync.WaitGroup\nfor i := 0; i < numUpdates; i++ {\n    wg.Add(1)\n    go func(val int) {\n        defer wg.Done()\n        s.Update(docID, store.Document{\"counter\": val})\n    }(i + 1)\n}\nwg.Wait()",
+            "language": "go"
+          }
+        },
+        "diagnosticPaths": {
+          "memory-leak-diagnosis": {
+            "error": "Potential Memory Leak (slow growth over time)",
+            "symptoms": "Application's memory usage steadily increases over time without proper cleanup.",
+            "check": "Verify `defer s.Close()` is used for every `store.NewStore()` call.",
+            "fix": "Ensure `s.Close()` is called to release internal maps and aid garbage collection."
+          }
+        }
+      }
     },
     {
       "title": "Problem Solving",
       "path": "problem-solving.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Problem Solving\"\ndescription: \"Problem Solving documentation and guidance\"\n---\n# Problem Solving\n\n## Problem Solving\n\nThis section addresses common issues you might encounter while using `go-store` and provides solutions or workarounds.\n\n### Troubleshooting Common Errors\n\n`go-store` defines specific error types to help you diagnose and handle issues programmatically. Here's a quick reference for the most common ones:\n\n*   **`store.ErrDocumentNotFound`**: This error indicates that the document with the specified ID does not exist in the store, or it has been deleted. Check the document ID, ensure it was correctly inserted, and hasn't been removed.\n*   **`store.ErrIndexNotFound`**: Occurs when attempting to `Lookup` or `DropIndex` an index that hasn't been created yet. Verify the index name and ensure `s.CreateIndex` was successfully called for that name.\n*   **`store.ErrIndexExists`**: You cannot create an index with a name that already exists. If you need to redefine an index, `DropIndex` the existing one first, then `CreateIndex`.\n*   **`store.ErrStoreClosed`**: Operations on the `Store` are not permitted after `s.Close()` has been called. Ensure you are not attempting to use a store instance after it has been explicitly closed.\n*   **`store.ErrInvalidDocument`**: This error is returned if you attempt to `Insert` or `Update` a document with a `nil` `store.Document` value. Always provide a valid `map[string]any`.\n*   **`store.ErrStreamClosed`**: This is a normal signal that a `DocumentStream` has completed iterating through all available documents or was explicitly closed via `DocumentStream.Close()`. It also appears if the store itself was closed while a stream was active.\n\n### FAQ (Frequently Asked Questions)\n\n**Q: Is `go-store` a persistent database?**\nA: No, `go-store` is an in-memory database. All data is volatile and will be lost when the application shuts down or crashes. It's ideal for caching, session management, or in-process data storage where persistence is handled externally or not required.\n\n**Q: How does `go-store` handle concurrency?**\nA: `go-store` is designed to be concurrency-safe. It uses `sync.RWMutex` for broad store-level operations (like adding/removing documents or indexes) and `atomic.Pointer` along with reference counting (`DocumentSnapshot`) for fine-grained, non-blocking reads and atomic document state transitions. Indexes also have their own mutexes, ensuring consistent data access under high concurrency.\n\n**Q: Does it support ACID properties?**\nA: `go-store` provides ACID-like properties for single-document operations due to its atomic updates and versioning (optimistic concurrency). This means individual `Insert`, `Update`, `Delete` operations are atomic and isolated. However, it does not support multi-document transactions in the traditional relational database sense.\n\n**Q: Can I use `go-store` for very large datasets?**\nA: Performance for `go-store` is excellent for in-memory operations. However, scalability is fundamentally limited by available RAM on the machine where your application is running. For datasets that exceed your application's memory capacity, consider traditional disk-based databases or distributed systems.\n\n**Q: Are functional indexes supported?**\nA: As of the current version, `go-store` provides field-based indexes for exact and range lookups. The `advanced/main.go` example includes a *simulated* functional index, indicating this could be a potential future feature, but it's not natively implemented yet.\n"
-    },
-    {
-      "title": "Project Architecture",
-      "path": "project-architecture.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Project Architecture\"\ndescription: \"Project Architecture documentation and guidance\"\n---\n# Project Architecture\n\n## Project Architecture\n\n`go-store` is structured around several key components that work together to provide a robust in-memory document store.\n\n*   **`Store`**: The central component of the database. It manages a collection of `DocumentHandle`s and a set of `fieldIndex`es. It coordinates all document operations (Insert, Update, Delete, Get) and index management (Create, Drop, Lookup). All access to the document and index maps are protected by a global RWMutex.\n*   **`Document`**: A type alias for `map[string]any`, representing the flexible, schemaless data structure for each record in the store. Values are deep-copied on mutations to ensure immutability of snapshots.\n*   **`DocumentHandle`**: A thread-safe wrapper around a document's current state. It uses `atomic.Pointer` and `sync.RWMutex` to manage the transition between different `DocumentSnapshot`s, ensuring atomic updates and safe concurrent reads. It's the primary reference to a document within the store's internal maps.\n*   **`DocumentSnapshot`**: An immutable, versioned snapshot of a document's data. Each update to a document generates a new snapshot. It includes a `refCount` for memory management, ensuring that snapshots are only cleared when no longer referenced by any `DocumentHandle` or ongoing query.\n*   **`fieldIndex`**: Represents a B-tree based index for one or more document fields. It uses `github.com/google/btree` for efficient storage and retrieval of `indexEntry` items. It maintains `docRefs` (map of document IDs to `DocumentHandle`s) for each key, allowing quick access to matching documents. Each `fieldIndex` has its own RWMutex for concurrent access.\n*   **`DocumentStream`**: Provides an iterator-like interface for consuming documents from the store. It's backed by Go channels and includes context-based cancellation, enabling efficient streaming of large result sets without loading all documents into memory at once.\n\n### Data Flow\n\n1.  **Insertion (`Insert`)**: A new document `ID` is generated, a `DocumentSnapshot` is created (versioned 1), and a `DocumentHandle` is initialized. This handle is added to the `Store`'s `documents` map. All active `fieldIndex`es are then updated to include the new document.\n2.  **Update (`Update`)**: A new `DocumentSnapshot` with an incremented global version is created from the updated data. The `DocumentHandle`'s `atomic.Pointer` is atomically swapped to point to this new snapshot. The old snapshot's reference count is decremented. All `fieldIndex`es are updated to reflect potential changes in indexed fields.\n3.  **Deletion (`Delete`)**: The `DocumentHandle` is removed from the `Store`'s `documents` map, and its internal snapshot pointer is set to `nil`. The final `DocumentSnapshot` is then passed to all `fieldIndex`es for removal, and its reference count is decremented.\n4.  **Retrieval (`Get`, `Lookup`, `Stream`)**: When a document is read, its `DocumentHandle` is accessed. A `DocumentSnapshot` is retrieved, and its reference count is temporarily incremented (`read()` method) to prevent it from being garbage collected while in use. Once processed, the snapshot's reference count is decremented (`release()` method).\n"
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Problem Solving\"\ndescription: \"Problem Solving documentation and guidance\"\n---\n# Problem Solving\n\n## Problem Solving\n\nThis section addresses common issues you might encounter while using `go-store` and provides solutions or workarounds.\n\n### Troubleshooting Common Errors\n\n`go-store` defines specific error types to help you diagnose and handle issues programmatically. Here's a quick reference for the most common ones:\n\n*   **`store.ErrDocumentNotFound`**: This error indicates that the document with the specified ID does not exist in the store, or it has been deleted. Check the document ID, ensure it was correctly inserted, and hasn't been removed.\n*   **`store.ErrIndexNotFound`**: Occurs when attempting to `Lookup` or `DropIndex` an index that hasn't been created yet. Verify the index name and ensure `s.CreateIndex` was successfully called for that name.\n*   **`store.ErrIndexExists`**: You cannot create an index with a name that already exists. If you need to redefine an index, `DropIndex` the existing one first, then `CreateIndex`.\n*   **`store.ErrStoreClosed`**: Operations on the `Store` are not permitted after `s.Close()` has been called. Ensure you are not attempting to use a store instance after it has been explicitly closed.\n*   **`store.ErrInvalidDocument`**: This error is returned if you attempt to `Insert` or `Update` a document with a `nil` `store.Document` value. Always provide a valid `map[string]any`.\n*   **`store.ErrStreamClosed`**: This is a normal signal that a `DocumentStream` has completed iterating through all available documents or was explicitly closed via `DocumentStream.Close()`. It also appears if the store itself was closed while a stream was active.\n\n### FAQ (Frequently Asked Questions)\n\n**Q: Is `go-store` a persistent database?**\nA: No, `go-store` is an in-memory database. All data is volatile and will be lost when the application shuts down or crashes. It's ideal for caching, session management, or in-process data storage where persistence is handled externally or not required.\n\n**Q: How does `go-store` handle concurrency?**\nA: `go-store` is designed to be concurrency-safe. It uses `sync.RWMutex` for broad store-level operations (like adding/removing documents or indexes) and `atomic.Pointer` along with reference counting (`DocumentSnapshot`) for fine-grained, non-blocking reads and atomic document state transitions. Indexes also have their own mutexes, ensuring consistent data access under high concurrency.\n\n**Q: Does it support ACID properties?**\nA: `go-store` provides ACID-like properties for single-document operations due to its atomic updates and versioning (optimistic concurrency). This means individual `Insert`, `Update`, `Delete` operations are atomic and isolated. However, it does not support multi-document transactions in the traditional relational database sense.\n\n**Q: Can I use `go-store` for very large datasets?**\nA: Performance for `go-store` is excellent for in-memory operations. However, scalability is fundamentally limited by available RAM on the machine where your application is running. For datasets that exceed your application's memory capacity, consider traditional disk-based databases or distributed systems.\n\n**Q: Are functional indexes supported?**\nA: As of the current version, `go-store` provides field-based indexes for exact and range lookups. The `advanced/main.go` example includes a *simulated* functional index, indicating this could be a potential future feature, but it's not natively implemented yet.\n",
+      "agentic": {
+        "diagnosticPaths": {
+          "err-document-not-found-diagnosis": {
+            "error": "ErrDocumentNotFound",
+            "symptoms": "Attempting to get, update, or delete a document results in this error.",
+            "check": "Verify the document ID is correct and if the document was previously inserted and not deleted.",
+            "fix": "Correct the document ID or ensure proper lifecycle management for documents."
+          },
+          "err-index-not-found-diagnosis": {
+            "error": "ErrIndexNotFound",
+            "symptoms": "Lookup or DropIndex operations fail with this error.",
+            "check": "Confirm the index name is correct and `CreateIndex` was called successfully for it.",
+            "fix": "Ensure the index is created before use, or correct the index name."
+          },
+          "err-index-exists-diagnosis": {
+            "error": "ErrIndexExists",
+            "symptoms": "`CreateIndex` fails when trying to create an index with an already used name.",
+            "check": "Review application logic to avoid duplicate index creation.",
+            "fix": "Use a unique index name or `DropIndex` before `CreateIndex` if redefining."
+          },
+          "err-store-closed-diagnosis": {
+            "error": "ErrStoreClosed",
+            "symptoms": "Any store operation fails after `s.Close()` has been invoked.",
+            "check": "Verify `Store` instance lifecycle; operations should only occur on an open store.",
+            "fix": "Do not use a `Store` instance after `s.Close()`. Create a new instance if needed."
+          },
+          "err-invalid-document-diagnosis": {
+            "error": "ErrInvalidDocument",
+            "symptoms": "`Insert` or `Update` fail when `nil` is passed as the document.",
+            "check": "Ensure `doc` parameter is a valid `store.Document` (`map[string]any`), not `nil`.",
+            "fix": "Always pass a non-`nil` map to `Insert` or `Update`."
+          },
+          "err-stream-closed-diagnosis": {
+            "error": "ErrStreamClosed",
+            "symptoms": "`DocumentStream.Next()` returns this error prematurely or unexpectedly.",
+            "check": "Verify if the stream has exhausted all documents, or if `DocumentStream.Close()` was called too early, or if `Store.Close()` was called while stream was active.",
+            "fix": "Use this error as a termination condition for stream iteration. Ensure `Close()` is called only when stream is truly no longer needed."
+          }
+        },
+        "antiPatterns": {
+          "forgetting-close": {
+            "name": "Forgetting to call `store.Close()`",
+            "description": "Failing to call `store.Close()` when the store instance is no longer needed can lead to memory leaks in long-running applications.",
+            "consequences": "Internal maps and document references might persist longer than necessary, delaying garbage collection and increasing memory footprint.",
+            "recommendation": "Always use `defer s.Close()` immediately after `s := store.NewStore()` to ensure proper resource release."
+          },
+          "modifying-document-result-directly": {
+            "name": "Modifying `DocumentResult.Data` directly affects the stored document.",
+            "description": "Attempting to modify the `Data` field of a `DocumentResult` will only affect the returned copy, not the original document in the store.",
+            "consequences": "Changes made to the retrieved document's data will not be reflected in the store, leading to stale data.",
+            "recommendation": "`DocumentResult.Data` is a deep copy. To update a document, you must call `s.Update(id, newDocumentData)` with new document data."
+          },
+          "expecting-persistence": {
+            "name": "Expecting data persistence across application restarts.",
+            "description": "`go-store` is an in-memory database, meaning all data is volatile.",
+            "consequences": "All data will be lost when the application exits or crashes.",
+            "recommendation": "For persistence, you need to implement external serialization/deserialization logic or use a persistent storage layer in conjunction with `go-store`."
+          }
+        }
+      }
     },
     {
       "title": "Development & Contributing",
       "path": "development-contributing.md",
-      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Development & Contributing\"\ndescription: \"Development & Contributing documentation and guidance\"\n---\n# Development & Contributing\n\n## Development & Contributing\n\nWe welcome contributions to `go-store`! Here's how to get started.\n\n### Development Setup\n\n1.  **Clone the repository**:\n    ```bash\ngit clone https://github.com/asaidimu/go-store/v3.git\ncd go-store\n    ```\n2.  **Build the project**:\n    ```bash\ngo build -v ./...\n    ```\n    This command compiles all packages in the current module.\n\n### Scripts\n\nThe project includes a simple `Makefile` for common development tasks:\n\n*   `make build`: Compiles the entire project. Equivalent to `go build -v ./...`.\n*   `make test`: Runs all unit tests with verbose output. Equivalent to `go test -v ./...`.\n*   `make clean`: Removes generated executable files.\n\n### Testing\n\nTo run the test suite and ensure everything is working correctly, execute:\n\n```bash\ngo test -v ./...\n```\n\nTo run performance benchmarks, which are crucial for an in-memory store:\n\n```bash\ngo test -bench=. -benchmem\n```\n\nThe tests cover basic CRUD operations, indexing, concurrency, and error handling.\n\n### Contributing Guidelines\n\nContributions are what make the open-source community an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.\n\n1.  **Fork the repository**: Click the \"Fork\" button at the top right of this page.\n2.  **Create your feature branch**:\n    ```bash\ngit checkout -b feature/amazing-feature\n    ```\n3.  **Commit your changes**: We follow Conventional Commits (see below).\n    ```bash\ngit commit -m 'feat: Add some amazing feature'\n    ```\n4.  **Push to the branch**:\n    ```bash\ngit push origin feature/amazing-feature\n    ```\n5.  **Open a Pull Request**: Describe your changes clearly and link to any relevant issues.\n\n#### Commit Message Format\n\nThis project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for automated semantic versioning. Please adhere to this format for your commit messages:\n\n*   `feat`: A new feature (corresponds to `MINOR` in SemVer)\n*   `fix`: A bug fix (corresponds to `PATCH` in SemVer)\n*   `build`: Changes that affect the build system or external dependencies\n*   `ci`: Changes to CI configuration files and scripts\n*   `docs`: Documentation only changes\n*   `perf`: A code change that improves performance\n*   `refactor`: A code change that neither fixes a bug nor adds a feature\n*   `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semicolons, etc.)\n*   `test`: Adding missing tests or correcting existing tests\n\nFor breaking changes, append `!` after the type/scope, or include `BREAKING CHANGE:` in the footer:\n\n*   `feat!: introduce breaking API change`\n*   `fix(auth)!: correct authentication flow`\n\n### Issue Reporting\n\nIf you find a bug or have a feature request, please open an issue on the [GitHub Issues page](https://github.com/asaidimu/go-store/v3/issues). When reporting a bug, please include:\n\n*   A clear and concise description of the problem.\n*   Steps to reproduce the behavior.\n*   Expected behavior.\n*   Actual behavior.\n*   Your Go version and OS.\n"
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Development & Contributing\"\ndescription: \"Development & Contributing documentation and guidance\"\n---\n# Development & Contributing\n\n## Development & Contributing\n\nWe welcome contributions to `go-store`! Here's how to get started.\n\n### Development Setup\n\n1.  **Clone the repository**:\n    ```bash\ngit clone https://github.com/asaidimu/go-store/v3.git\ncd go-store\n    ```\n2.  **Build the project**:\n    ```bash\ngo build -v ./...\n    ```\n    This command compiles all packages in the current module.\n\n### Scripts\n\nThe project includes a simple `Makefile` for common development tasks:\n\n*   `make build`: Compiles the entire project. Equivalent to `go build -v ./...`.\n*   `make test`: Runs all unit tests with verbose output. Equivalent to `go test -v ./...`.\n*   `make clean`: Removes generated executable files.\n\n### Testing\n\nTo run the test suite and ensure everything is working correctly, execute:\n\n```bash\ngo test -v ./...\n```\n\nTo run performance benchmarks, which are crucial for an in-memory store:\n\n```bash\ngo test -bench=. -benchmem\n```\n\nThe tests cover basic CRUD operations, indexing, concurrency, and error handling.\n\n### Contributing Guidelines\n\nContributions are what make the open-source community an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.\n\n1.  **Fork the repository**: Click the \"Fork\" button at the top right of this page.\n2.  **Create your feature branch**:\n    ```bash\ngit checkout -b feature/amazing-feature\n    ```\n3.  **Commit your changes**: We follow Conventional Commits (see below).\n    ```bash\ngit commit -m 'feat: Add some amazing feature'\n    ```\n4.  **Push to the branch**:\n    ```bash\ngit push origin feature/amazing-feature\n    ```\n5.  **Open a Pull Request**: Describe your changes clearly and link to any relevant issues.\n\n#### Commit Message Format\n\nThis project follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for automated semantic versioning. Please adhere to this format for your commit messages:\n\n*   `feat`: A new feature (corresponds to `MINOR` in SemVer)\n*   `fix`: A bug fix (corresponds to `PATCH` in SemVer)\n*   `build`: Changes that affect the build system or external dependencies\n*   `ci`: Changes to CI configuration files and scripts\n*   `docs`: Documentation only changes\n*   `perf`: A code change that improves performance\n*   `refactor`: A code change that neither fixes a bug nor adds a feature\n*   `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semicolons, etc.)\n*   `test`: Adding missing tests or correcting existing tests\n\nFor breaking changes, append `!` after the type/scope, or include `BREAKING CHANGE:` in the footer:\n\n*   `feat!: introduce breaking API change`\n*   `fix(auth)!: correct authentication flow`\n\n### Issue Reporting\n\nIf you find a bug or have a feature request, please open an issue on the [GitHub Issues page](https://github.com/asaidimu/go-store/v3/issues). When reporting a bug, please include:\n\n*   A clear and concise description of the problem.\n*   Steps to reproduce the behavior.\n*   Expected behavior.\n*   Actual behavior.\n*   Your Go version and OS.\n",
+      "agentic": null
+    },
+    {
+      "title": "Project Architecture",
+      "path": "project-architecture.md",
+      "content": "---\noutline: \"deep\"\nlastUpdated: true\neditLink: true\nprev: true\nnext: true\ntitle: \"Project Architecture\"\ndescription: \"Project Architecture documentation and guidance\"\n---\n# Project Architecture\n\n## Project Architecture\n\n`go-store` is structured around several key components that work together to provide a robust in-memory document store.\n\n*   **`Store`**: The central component of the database. It manages a collection of `DocumentHandle`s and a set of `fieldIndex`es. It coordinates all document operations (Insert, Update, Delete, Get) and index management (Create, Drop, Lookup). All access to the document and index maps are protected by a global RWMutex.\n*   **`Document`**: A type alias for `map[string]any`, representing the flexible, schemaless data structure for each record in the store. Values are deep-copied on mutations to ensure immutability of snapshots.\n*   **`DocumentHandle`**: A thread-safe wrapper around a document's current state. It uses `atomic.Pointer` and `sync.RWMutex` to manage the transition between different `DocumentSnapshot`s, ensuring atomic updates and safe concurrent reads. It's the primary reference to a document within the store's internal maps.\n*   **`DocumentSnapshot`**: An immutable, versioned snapshot of a document's data. Each update to a document generates a new snapshot. It includes a `refCount` for memory management, ensuring that snapshots are only cleared when no longer referenced by any `DocumentHandle` or ongoing query.\n*   **`fieldIndex`**: Represents a B-tree based index for one or more document fields. It uses `github.com/google/btree` for efficient storage and retrieval of `indexEntry` items. It maintains `docRefs` (map of document IDs to `DocumentHandle`s) for each key, allowing quick access to matching documents. Each `fieldIndex` has its own RWMutex for concurrent access.\n*   **`DocumentStream`**: Provides an iterator-like interface for consuming documents from the store. It's backed by Go channels and includes context-based cancellation, enabling efficient streaming of large result sets without loading all documents into memory at once.\n\n### Data Flow\n\n1.  **Insertion (`Insert`)**: A new document `ID` is generated, a `DocumentSnapshot` is created (versioned 1), and a `DocumentHandle` is initialized. This handle is added to the `Store`'s `documents` map. All active `fieldIndex`es are then updated to include the new document.\n2.  **Update (`Update`)**: A new `DocumentSnapshot` with an incremented global version is created from the updated data. The `DocumentHandle`'s `atomic.Pointer` is atomically swapped to point to this new snapshot. The old snapshot's reference count is decremented. All `fieldIndex`es are updated to reflect potential changes in indexed fields.\n3.  **Deletion (`Delete`)**: The `DocumentHandle` is removed from the `Store`'s `documents` map, and its internal snapshot pointer is set to `nil`. The final `DocumentSnapshot` is then passed to all `fieldIndex`es for removal, and its reference count is decremented.\n4.  **Retrieval (`Get`, `Lookup`, `Stream`)**: When a document is read, its `DocumentHandle` is accessed. A `DocumentSnapshot` is retrieved, and its reference count is temporarily incremented (`read()` method) to prevent it from being garbage collected while in use. Once processed, the snapshot's reference count is decremented (`release()` method).\n",
+      "agentic": null
     }
   ],
   "reference": {
@@ -73,14 +317,12 @@
         {
           "name": "github.com/google/btree",
           "purpose": "Provides an efficient B-tree implementation used internally for maintaining sorted indexes, enabling fast lookups and range queries.",
-          "interfaces": [],
           "installation": "go get github.com/google/btree",
           "version": ">=1.0.0"
         },
         {
           "name": "github.com/google/uuid",
           "purpose": "Used for generating universally unique identifiers (UUIDs) for document IDs, ensuring each document has a unique ID.",
-          "interfaces": [],
           "installation": "go get github.com/google/uuid",
           "version": ">=1.0.0"
         }
@@ -91,9 +333,10 @@
       "environmentRequirements": "Go Runtime Environment (Go 1.24.4+ recommended). No special compiler settings or platform constraints beyond standard Go compilation.",
       "initializationPatterns": [
         {
-          "title": "Standard Store Initialization",
-          "description": "The most common way to initialize the store and ensure proper resource cleanup upon application shutdown.",
-          "codeExample": "package main\n\nimport (\n\t\"fmt\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\t// Initialize a new store instance\n\ts := store.NewStore()\n\t// Defer the Close method call to ensure resources are released\n\t// when the main function exits.\n\tdefer s.Close()\n\n\tfmt.Println(\"Store initialized and ready for use.\")\n\n\t// ... perform store operations here ...\n}\n"
+          "title": "The most common way to initialize the store and ensure proper resource cleanup upon application shutdown.",
+          "description": "The `NewStore()` function initializes a new `Store` instance. It is crucial to defer the `Close()` method call immediately after initialization to ensure that all internal resources are properly released when the function or application exits.",
+          "codeExample": "package main\n\nimport (\n\t\"fmt\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\t// Initialize a new store instance\n\ts := store.NewStore()\n\t// Defer the Close method call to ensure resources are released\n\t// when the main function exits.\n\tdefer s.Close()\n\n\tfmt.Println(\"Store initialized and ready for use.\")\n\n\t// ... perform store operations here ...\n}",
+          "language": "go"
         }
       ],
       "commonPitfalls": [
@@ -113,6 +356,88 @@
       "lifecycleDependencies": "The `Store` instance should be initialized once at the application's startup phase (e.g., in `main` or a dedicated initialization function). Its `Close()` method should be called during the application's graceful shutdown procedure to release all allocated memory and resources. Operations performed on a `closed` store will result in `ErrStoreClosed`."
     },
     "interfaces": {
+      "DocumentLike": {
+        "id": "interface:DocumentLike",
+        "definition": "type DocumentLike interface {\n\t~map[string]any\n}",
+        "purpose": "A type constraint that allows any type alias of `map[string]any` to be used as a document within generic contexts like `Cursor`.",
+        "related": {
+          "methods": [],
+          "types": ["type:DocumentResult"],
+          "patterns": []
+        },
+        "interfaceContract": {
+          "requiredMethods": [],
+          "optionalMethods": [],
+          "parameterObjectStructures": {}
+        }
+      },
+      "Cursor": {
+        "id": "interface:Cursor",
+        "definition": "type Cursor[T DocumentLike] interface {\n\tNext() (*T, bool /* has next */, error)\n\tPrevious() (*T, bool /* has previous */, error)\n\tAdvance(count int /* can be negative */) (*T, bool /* has next/previous depending on intended direction */, error)\n\tReset() error     // For algorithms that need multiple passes\n\tClone() Cursor[T] // For nested operations\n\tCount() int       // Maximum number of documents we can iterate over\n\tClose() error     // Clean up resources\n}",
+        "purpose": "Provides a generic interface for bidirectional iteration over a collection of `DocumentLike` types, allowing flexible navigation and snapshot handling.",
+        "related": {
+          "methods": ["method:StoreCursor.Next", "method:StoreCursor.Previous", "method:StoreCursor.Advance", "method:StoreCursor.Reset", "method:StoreCursor.Clone", "method:StoreCursor.Count", "method:StoreCursor.Close"],
+          "types": ["type:DocumentResult"],
+          "patterns": []
+        },
+        "interfaceContract": {
+          "requiredMethods": [
+            {
+              "name": "Next",
+              "signature": "Next() (*T, bool, error)",
+              "parameters": {},
+              "returnValue": "A pointer to the next document of type T, a boolean indicating if there are more documents, and an error if the stream is closed or the document is deleted.",
+              "sideEffects": "Advances the cursor's internal position by one. May return `ErrStreamClosed` if called on a closed cursor or `ErrDocumentDeleted` if the document at the next position was removed."
+            },
+            {
+              "name": "Previous",
+              "signature": "Previous() (*T, bool, error)",
+              "parameters": {},
+              "returnValue": "A pointer to the previous document of type T, a boolean indicating if there are more documents, and an error.",
+              "sideEffects": "Moves the cursor's internal position back by one. Equivalent to calling `Advance(-1)`."
+            },
+            {
+              "name": "Advance",
+              "signature": "Advance(count int) (*T, bool, error)",
+              "parameters": {
+                "count int": "The number of positions to move the cursor. Can be positive (forward) or negative (backward)."
+              },
+              "returnValue": "A pointer to the document at the new position, a boolean indicating if there are more documents in the direction of advance, and an error.",
+              "sideEffects": "Adjusts the cursor's internal position by `count`. Clamps to the start or end of the document list if `count` would move it out of bounds."
+            },
+            {
+              "name": "Reset",
+              "signature": "Reset() error",
+              "parameters": {},
+              "returnValue": "`nil` on success, `ErrStreamClosed` if the cursor is already closed.",
+              "sideEffects": "Resets the cursor's internal position to the beginning (index 0) of its document snapshot."
+            },
+            {
+              "name": "Clone",
+              "signature": "Clone() Cursor[T]",
+              "parameters": {},
+              "returnValue": "A new `Cursor` instance that is an independent copy of the current cursor, starting at the same position and referencing the same document snapshot.",
+              "sideEffects": "None directly on the original cursor; creates a new object."
+            },
+            {
+              "name": "Count",
+              "signature": "Count() int",
+              "parameters": {},
+              "returnValue": "The total number of documents in the cursor's snapshot.",
+              "sideEffects": "None (read-only operation)."
+            },
+            {
+              "name": "Close",
+              "signature": "Close() error",
+              "parameters": {},
+              "returnValue": "`nil` on success.",
+              "sideEffects": "Marks the cursor as closed and releases its internal reference to the document handles, aiding garbage collection."
+            }
+          ],
+          "optionalMethods": [],
+          "parameterObjectStructures": {}
+        }
+      },
       "Document": {
         "id": "interface:Document",
         "definition": "type Document map[string]any",
@@ -158,6 +483,13 @@
               "parameters": {},
               "returnValue": "A `DocumentResult` struct containing the document ID, a deep copy of its data, and its version. If the stream is exhausted or closed, `DocumentResult{}` is returned with an error.",
               "sideEffects": "Consumes the next available document from the internal channel. If the channel is empty, it blocks until a document is available, an error occurs, or the stream is closed/cancelled."
+            },
+            {
+              "name": "Close",
+              "signature": "func (ds *DocumentStream) Close()",
+              "parameters": {},
+              "returnValue": "None",
+              "sideEffects": "Cancels the stream's internal `context.Context` and closes its `results` and `errors` channels. Any pending `Next()` calls will be unblocked and return `ErrStreamClosed` or a context-related error."
             }
           ],
           "optionalMethods": [],
@@ -179,11 +511,6 @@
             "method:LookupRange"
           ],
           "patterns": []
-        },
-        "interfaceContract": {
-          "requiredMethods": [],
-          "optionalMethods": [],
-          "parameterObjectStructures": {}
         }
       }
     },
@@ -202,9 +529,7 @@
         "related": {
           "interfaces": [],
           "types": [],
-          "patterns": [
-            "pattern:Basic Document CRUD"
-          ],
+          "patterns": ["pattern:Basic Document CRUD"],
           "errors": []
         }
       },
@@ -213,7 +538,7 @@
         "useCase": "To add a new document to the store. A unique ID is automatically generated for the document.",
         "signature": "func (s *Store) Insert(doc Document) (string, error)",
         "parameters": {
-          "doc Document": "The document data to insert, represented as a `map[string]any`. Must not be `nil`."
+          "doc Document": "The document data (`map[string]any`) to be inserted. Must not be `nil`."
         },
         "prerequisites": "The store must not be closed. The `doc` parameter must not be `nil`.",
         "sideEffects": "Generates a new UUID for the document. Creates a new `DocumentHandle` and `DocumentSnapshot`. Adds the document to the store's internal map. Increments the global store version. Updates all active indexes to include the new document.",
@@ -227,9 +552,7 @@
         "related": {
           "interfaces": [],
           "types": [],
-          "patterns": [
-            "pattern:Basic Document CRUD"
-          ],
+          "patterns": ["pattern:Basic Document CRUD"],
           "errors": [
             "error:ErrStoreClosed",
             "error:ErrInvalidDocument"
@@ -242,7 +565,7 @@
         "signature": "func (s *Store) Update(docID string, doc Document) error",
         "parameters": {
           "docID string": "The unique identifier of the document to update.",
-          "doc Document": "The new document data to replace the existing one, represented as a `map[string]any`. Must not be `nil`."
+          "doc Document": "The new document data (`map[string]any`). Must not be `nil`. This data will completely replace the old document's data."
         },
         "prerequisites": "The store must not be closed. The `doc` parameter must not be `nil`. A document with the given `docID` must exist in the store and not have been concurrently deleted.",
         "sideEffects": "Creates a new `DocumentSnapshot` with the updated data and an incremented version. Atomically replaces the old snapshot in the `DocumentHandle`. Updates all active indexes if the fields relevant to those indexes have changed. Releases the old `DocumentSnapshot` when no longer referenced.",
@@ -289,9 +612,7 @@
         "related": {
           "interfaces": [],
           "types": [],
-          "patterns": [
-            "pattern:Basic Document CRUD"
-          ],
+          "patterns": ["pattern:Basic Document CRUD"],
           "errors": [
             "error:ErrStoreClosed",
             "error:ErrDocumentNotFound"
@@ -317,12 +638,8 @@
         "status": "active",
         "related": {
           "interfaces": [],
-          "types": [
-            "type:DocumentResult"
-          ],
-          "patterns": [
-            "pattern:Basic Document CRUD"
-          ],
+          "types": ["type:DocumentResult"],
+          "patterns": ["pattern:Basic Document CRUD"],
           "errors": [
             "error:ErrStoreClosed",
             "error:ErrDocumentNotFound",
@@ -348,9 +665,7 @@
         "related": {
           "interfaces": [],
           "types": [],
-          "patterns": [
-            "pattern:Streaming Documents"
-          ],
+          "patterns": ["pattern:Streaming Documents"],
           "errors": [
             "error:ErrStoreClosed"
           ]
@@ -362,7 +677,7 @@
         "signature": "func (s *Store) CreateIndex(indexName string, fields []string) error",
         "parameters": {
           "indexName string": "A unique name for the new index.",
-          "fields []string": "A slice of field names on which to build the index. The order matters for composite indexes. Must not be empty."
+          "fields []string": "A slice of strings specifying the document fields to index. The order of fields matters for composite indexes. Must not be empty."
         },
         "prerequisites": "The store must not be closed. The `indexName` must be unique (an index with the same name must not already exist). The `fields` slice must not be empty.",
         "sideEffects": "Allocates memory for a new `fieldIndex` (B-tree). Populates the new index with existing documents from the store that contain all specified fields. Adds the new index to the store's internal index map.",
@@ -377,9 +692,7 @@
         "related": {
           "interfaces": [],
           "types": [],
-          "patterns": [
-            "pattern:Indexed Lookup"
-          ],
+          "patterns": ["pattern:Indexed Lookup"],
           "errors": [
             "error:ErrStoreClosed",
             "error:ErrEmptyIndex",
@@ -419,7 +732,7 @@
         "signature": "func (s *Store) Lookup(indexName string, values []any) ([]*DocumentResult, error)",
         "parameters": {
           "indexName string": "The name of the index to use for the lookup.",
-          "values []any": "A slice of values to match, corresponding to the fields defined in the index. The order and count of values must match the index definition."
+          "values []any": "A slice of values to match against the index. For composite indexes, the order of values must match the order of fields used during index creation."
         },
         "prerequisites": "The store must not be closed. An index with the given `indexName` must exist.",
         "sideEffects": "None (read-only operation).",
@@ -432,12 +745,8 @@
         "status": "active",
         "related": {
           "interfaces": [],
-          "types": [
-            "type:DocumentResult"
-          ],
-          "patterns": [
-            "pattern:Indexed Lookup"
-          ],
+          "types": ["type:DocumentResult"],
+          "patterns": ["pattern:Indexed Lookup"],
           "errors": [
             "error:ErrStoreClosed",
             "error:ErrIndexNotFound"
@@ -450,8 +759,8 @@
         "signature": "func (s *Store) LookupRange(indexName string, minValues, maxValues []any) ([]*DocumentResult, error)",
         "parameters": {
           "indexName string": "The name of the index to use for the range lookup.",
-          "minValues []any": "The lower bound of the range (inclusive). The order and count of values must match the index definition.",
-          "maxValues []any": "The upper bound of the range (inclusive). The order and count of values must match the index definition."
+          "minValues []any": "A slice of values defining the lower bound of the range (inclusive).",
+          "maxValues []any": "A slice of values defining the upper bound of the range (inclusive)."
         },
         "prerequisites": "The store must not be closed. An index with the given `indexName` must exist. The `minValues` should logically precede or be equal to `maxValues` according to the index's sorting logic, otherwise an empty result set will be returned.",
         "sideEffects": "None (read-only operation).",
@@ -464,12 +773,8 @@
         "status": "active",
         "related": {
           "interfaces": [],
-          "types": [
-            "type:DocumentResult"
-          ],
-          "patterns": [
-            "pattern:Indexed Lookup"
-          ],
+          "types": ["type:DocumentResult"],
+          "patterns": ["pattern:Indexed Lookup"],
           "errors": [
             "error:ErrStoreClosed",
             "error:ErrIndexNotFound"
@@ -493,12 +798,8 @@
         "status": "active",
         "related": {
           "interfaces": [],
-          "types": [
-            "type:DocumentResult"
-          ],
-          "patterns": [
-            "pattern:Streaming Documents"
-          ],
+          "types": ["type:DocumentResult"],
+          "patterns": ["pattern:Streaming Documents"],
           "errors": [
             "error:ErrStreamClosed"
           ]
@@ -512,15 +813,12 @@
         "prerequisites": "None.",
         "sideEffects": "Cancels the stream's internal `context.Context` and closes its `results` and `errors` channels. Any pending `Next()` calls will be unblocked and return `ErrStreamClosed` or a context-related error.",
         "returnValue": "None",
-        "exceptions": [],
         "availability": "sync",
         "status": "active",
         "related": {
           "interfaces": [],
           "types": [],
-          "patterns": [
-            "pattern:Streaming Documents"
-          ],
+          "patterns": ["pattern:Streaming Documents"],
           "errors": []
         }
       },
@@ -532,7 +830,6 @@
         "prerequisites": "None.",
         "sideEffects": "Sets the store's internal `closed` flag to true, preventing any further operations. Clears the `documents` and `indexes` maps to aid Go's garbage collection. Releases all `DocumentSnapshot` resources once their reference counts drop to zero.",
         "returnValue": "None",
-        "exceptions": [],
         "availability": "sync",
         "status": "active",
         "related": {
@@ -543,51 +840,211 @@
             "error:ErrStoreClosed"
           ]
         }
-      }
-    },
-    "decisionTrees": {
-      "Choosing a lookup strategy": {
-        "id": "decisionTree:Choosing a lookup strategy",
-        "question": "How should I retrieve documents?",
-        "logic": "IF exact match needed AND index exists THEN use `Lookup` ELSE IF range query needed AND index exists THEN use `LookupRange` ELSE IF iterating all documents THEN use `Stream` ELSE IF specific document by ID THEN use `Get`.",
-        "validationMethod": "Verify query results match expected documents.",
+      },
+      "Store.Read": {
+        "id": "method:Store.Read",
+        "useCase": "To create a cursor that provides bidirectional iteration over all documents currently in the store. This creates a snapshot of the store's documents at the time of the call.",
+        "signature": "func (s *Store) Read() (*StoreCursor[map[string]any], error)",
+        "parameters": {},
+        "prerequisites": "The store must not be closed.",
+        "sideEffects": "Creates a snapshot of current document handles in the store. Sorts the handles by their internal collection index to ensure a consistent iteration order.",
+        "returnValue": "A pointer to a `StoreCursor` instance that can be used to iterate over documents, or an error if the store is closed.",
+        "exceptions": [
+          "ErrStoreClosed"
+        ],
+        "availability": "sync",
+        "status": "active",
         "related": {
-          "interfaces": [],
-          "methods": [
-            "method:Get",
-            "method:Lookup",
-            "method:LookupRange",
-            "method:Stream"
-          ],
-          "patterns": [
-            "pattern:Indexed Lookup",
-            "pattern:Streaming Documents",
-            "pattern:Basic Document CRUD"
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": ["error:ErrStoreClosed"]
+        }
+      },
+      "Store.ReadIndex": {
+        "id": "method:Store.ReadIndex",
+        "useCase": "To create a cursor that iterates over documents included in a specific index. Documents are returned in the order defined by the index's fields.",
+        "signature": "func (s *Store) ReadIndex(indexName string) (*StoreCursor[map[string]any], error)",
+        "parameters": {
+          "indexName string": "The name of the index to read documents from."
+        },
+        "prerequisites": "The store must not be closed. An index with the given `indexName` must exist.",
+        "sideEffects": "Collects document handles associated with the specified index.",
+        "returnValue": "A pointer to a `StoreCursor` instance filtered by the specified index, or an error if the index does not exist or the store is closed.",
+        "exceptions": [
+          "ErrStoreClosed",
+          "ErrIndexNotFound"
+        ],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": ["pattern:Indexed Lookup"],
+          "errors": [
+            "error:ErrStoreClosed",
+            "error:ErrIndexNotFound"
           ]
         }
       },
-      "Handling concurrent document updates": {
-        "id": "decisionTree:Handling concurrent document updates",
-        "question": "How do I ensure data consistency when multiple goroutines update the same document?",
-        "logic": "IF optimistic concurrency is sufficient THEN rely on `Update`'s internal versioning and locking ELSE consider external coordination mechanisms if strong transactional guarantees across multiple documents are required.",
-        "validationMethod": "After concurrent updates, verify the final document's version number reflects the total successful updates.",
+      "StoreCursor.Next": {
+        "id": "method:StoreCursor.Next",
+        "useCase": "To retrieve the next document from the cursor's snapshot and advance its position by one. This is typically used for forward iteration.",
+        "signature": "func (sc *StoreCursor[T]) Next() (*T, bool, error)",
+        "parameters": {},
+        "prerequisites": "The `StoreCursor` must not be closed.",
+        "sideEffects": "Increments the cursor's internal position. May return `ErrDocumentDeleted` if the document at the next position was removed from the underlying collection since the cursor was created.",
+        "returnValue": "A pointer to the next document (`*T`), a boolean indicating if there are more documents after the current one, and an `error` if the cursor is closed or the document is no longer available.",
+        "exceptions": [
+          "ErrStreamClosed",
+          "ErrDocumentDeleted"
+        ],
+        "availability": "sync",
+        "status": "active",
         "related": {
-          "interfaces": [],
-          "methods": [
-            "method:Update"
-          ],
-          "patterns": [
-            "pattern:Concurrent Update Pattern"
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": [
+            "error:ErrStreamClosed",
+            "error:ErrDocumentDeleted"
           ]
+        }
+      },
+      "StoreCursor.Previous": {
+        "id": "method:StoreCursor.Previous",
+        "useCase": "To retrieve the previous document from the cursor's snapshot and move its position backward by one. This is typically used for backward iteration.",
+        "signature": "func (sc *StoreCursor[T]) Previous() (*T, bool, error)",
+        "parameters": {},
+        "prerequisites": "The `StoreCursor` must not be closed.",
+        "sideEffects": "Decrements the cursor's internal position. This method is a convenience wrapper around `Advance(-1)`.",
+        "returnValue": "A pointer to the previous document (`*T`), a boolean indicating if there are more documents before the current one, and an `error` if the cursor is closed or the document is no longer available.",
+        "exceptions": [
+          "ErrStreamClosed",
+          "ErrDocumentDeleted"
+        ],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": [
+            "error:ErrStreamClosed",
+            "error:ErrDocumentDeleted"
+          ]
+        }
+      },
+      "StoreCursor.Advance": {
+        "id": "method:StoreCursor.Advance",
+        "useCase": "To move the cursor's position by a specified `count` and retrieve the document at the new position. This allows flexible navigation (forward or backward) within the cursor's snapshot.",
+        "signature": "func (sc *StoreCursor[T]) Advance(count int) (*T, bool, error)",
+        "parameters": {
+          "count int": "The number of positions to move the cursor. Positive values move forward, negative values move backward. The cursor position will be clamped to the valid range if the count would exceed bounds."
+        },
+        "prerequisites": "The `StoreCursor` must not be closed.",
+        "sideEffects": "Adjusts the cursor's internal position. If the requested position is out of bounds, the cursor is clamped to the first or last valid document. May return `ErrDocumentDeleted`.",
+        "returnValue": "A pointer to the document (`*T`) at the new position, a boolean indicating if there are more documents in the direction of the advance (relative to the clamped position), and an `error` if the cursor is closed or the document is no longer available.",
+        "exceptions": [
+          "ErrStreamClosed",
+          "ErrDocumentDeleted"
+        ],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": [
+            "error:ErrStreamClosed",
+            "error:ErrDocumentDeleted"
+          ]
+        }
+      },
+      "StoreCursor.Reset": {
+        "id": "method:StoreCursor.Reset",
+        "useCase": "To reset the cursor's internal position back to the very first document in its snapshot. Useful for performing multiple passes over the same data set.",
+        "signature": "func (sc *StoreCursor[T]) Reset() error",
+        "parameters": {},
+        "prerequisites": "The `StoreCursor` must not be closed.",
+        "sideEffects": "Sets the cursor's internal position to 0.",
+        "returnValue": "`nil` on success, or `ErrStreamClosed` if the cursor is already closed.",
+        "exceptions": [
+          "ErrStreamClosed"
+        ],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": [
+            "error:ErrStreamClosed"
+          ]
+        }
+      },
+      "StoreCursor.Clone": {
+        "id": "method:StoreCursor.Clone",
+        "useCase": "To create an independent copy of the current `StoreCursor` instance. The cloned cursor starts at the same position and refers to the same immutable snapshot of documents.",
+        "signature": "func (sc *StoreCursor[T]) Clone() Cursor[T]",
+        "parameters": {},
+        "prerequisites": "None.",
+        "sideEffects": "Creates a new `StoreCursor` object. Does not affect the original cursor.",
+        "returnValue": "A new `Cursor` interface (`Cursor[T]`) instance that is a copy of the original. If the original cursor is closed, the cloned cursor will also be closed.",
+        "exceptions": [],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": []
+        }
+      },
+      "StoreCursor.Count": {
+        "id": "method:StoreCursor.Count",
+        "useCase": "To get the total number of documents available in the cursor's current snapshot. This reflects the count at the time the cursor was created.",
+        "signature": "func (sc *StoreCursor[T]) Count() int",
+        "parameters": {},
+        "prerequisites": "None.",
+        "sideEffects": "None (read-only operation).",
+        "returnValue": "An `int` representing the total count of documents in the snapshot. Returns 0 if the cursor is closed or has no documents.",
+        "exceptions": [],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": []
+        }
+      },
+      "StoreCursor.Close": {
+        "id": "method:StoreCursor.Close",
+        "useCase": "To explicitly close the `StoreCursor`, releasing its internal resources and marking it as unusable for further iteration. This is important for memory management.",
+        "signature": "func (sc *StoreCursor[T]) Close() error",
+        "parameters": {},
+        "prerequisites": "None.",
+        "sideEffects": "Sets the `closed` flag to `true` and sets its internal `handles` slice to `nil`, allowing it to be garbage collected.",
+        "returnValue": "`nil` on success. Calling `Close()` multiple times has no additional effect.",
+        "exceptions": [],
+        "availability": "sync",
+        "status": "active",
+        "related": {
+          "interfaces": ["interface:Cursor"],
+          "types": [],
+          "patterns": [],
+          "errors": []
         }
       }
     },
+    "decisionTrees": {},
     "patterns": {
       "Basic Document CRUD": {
         "id": "pattern:Basic Document CRUD",
         "description": "The fundamental pattern for creating, reading, updating, and deleting documents within the store.",
         "example": {
-          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Insert\n\tdoc := store.Document{\"name\": \"Example\", \"value\": 10}\n\tid, err := s.Insert(doc)\n\tif err != nil { log.Fatalf(\"Insert failed: %v\", err) }\n\tfmt.Printf(\"Inserted ID: %s\\n\", id)\n\n\t// Get\n\tretrieved, err := s.Get(id)\n\tif err != nil { log.Fatalf(\"Get failed: %v\", err) }\n\tfmt.Printf(\"Retrieved: %+v\\n\", retrieved.Data)\n\n\t// Update\n\tupdatedDoc := store.Document{\"name\": \"Updated Example\", \"value\": 20, \"status\": \"done\"}\n\terr = s.Update(id, updatedDoc)\n\tif err != nil { log.Fatalf(\"Update failed: %v\", err) }\n\tfmt.Println(\"Document updated.\")\n\n\t// Delete\n\terr = s.Delete(id)\n\tif err != nil { log.Fatalf(\"Delete failed: %v\", err) }\n\tfmt.Println(\"Document deleted.\")\n}\n",
+          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Insert\n\tdoc := store.Document{\"name\": \"Example\", \"value\": 10}\n\tid, err := s.Insert(doc)\n\tif err != nil { log.Fatalf(\"Insert failed: %v\", err) }\n\tfmt.Printf(\"Inserted ID: %s\\n\", id)\n\n\t// Get\n\tretrieved, err := s.Get(id)\n\tif err != nil { log.Fatalf(\"Get failed: %v\", err) }\n\tfmt.Printf(\"Retrieved: %+v\\n\", retrieved.Data)\n\n\t// Update\n\tupdatedDoc := store.Document{\"name\": \"Updated Example\", \"value\": 20, \"status\": \"done\"}\n\terr = s.Update(id, updatedDoc)\n\tif err != nil { log.Fatalf(\"Update failed: %v\", err) }\n\tfmt.Println(\"Document updated.\")\n\n\t// Delete\n\terr = s.Delete(id)\n\tif err != nil { log.Fatalf(\"Delete failed: %v\", err) }\n\tfmt.Println(\"Document deleted.\")\n}",
           "validation": "Successful execution logs indicating document creation, retrieval, update, and deletion without errors. Attempting to retrieve after delete results in 'document not found' error."
         },
         "related": {
@@ -608,7 +1065,7 @@
         "id": "pattern:Indexed Lookup",
         "description": "How to create and utilize indexes for efficient exact and range-based document retrieval.",
         "example": {
-          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Insert sample data\n\ts.Insert(store.Document{\"city\": \"New York\", \"age\": 30})\n\ts.Insert(store.Document{\"city\": \"London\", \"age\": 25})\n\ts.Insert(store.Document{\"city\": \"New York\", \"age\": 35})\n\n\t// Create an index\n\terr := s.CreateIndex(\"by_city_age\", []string{\"city\", \"age\"})\n\tif err != nil { log.Fatalf(\"CreateIndex failed: %v\", err) }\n\tfmt.Println(\"Index 'by_city_age' created.\")\n\n\t// Exact Lookup\n\tny30Docs, err := s.Lookup(\"by_city_age\", []any{\"New York\", 30})\n\tif err != nil { log.Fatalf(\"Lookup failed: %v\", err) }\n\tfmt.Printf(\"\\nDocs in NY, age 30: %d\\n\", len(ny30Docs))\n\tfor _, doc := range ny30Docs { fmt.Printf(\"  %+v\\n\", doc.Data) }\n\n\t// Range Lookup\n\tageRangeDocs, err := s.LookupRange(\"by_city_age\", []any{\"New York\", 20}, []any{\"New York\", 40})\n\tif err != nil { log.Fatalf(\"LookupRange failed: %v\", err) }\n\tfmt.Printf(\"\\nDocs in NY, age 20-40: %d\\n\", len(ageRangeDocs))\n\tfor _, doc := range ageRangeDocs { fmt.Printf(\"  %+v\\n\", doc.Data) }\n}\n",
+          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Insert sample data\n\ts.Insert(store.Document{\"city\": \"New York\", \"age\": 30})\n\ts.Insert(store.Document{\"city\": \"London\", \"age\": 25})\n\ts.Insert(store.Document{\"city\": \"New York\", \"age\": 35})\n\n\t// Create an index\n\terr := s.CreateIndex(\"by_city_age\", []string{\"city\", \"age\"})\n\tif err != nil { log.Fatalf(\"CreateIndex failed: %v\", err) }\n\tfmt.Println(\"Index 'by_city_age' created.\")\n\n\t// Exact Lookup\n\tny30Docs, err := s.Lookup(\"by_city_age\", []any{\"New York\", 30})\n\tif err != nil { log.Fatalf(\"Lookup failed: %v\", err) }\n\tfmt.Printf(\"\\nDocs in NY, age 30: %d\\n\", len(ny30Docs))\n\tfor _, doc := range ny30Docs { fmt.Printf(\"  %+v\\n\", doc.Data) }\n\n\t// Range Lookup\n\tageRangeDocs, err := s.LookupRange(\"by_city_age\", []any{\"New York\", 20}, []any{\"New York\", 40})\n\tif err != nil { log.Fatalf(\"LookupRange failed: %v\", err) }\n\tfmt.Printf(\"\\nDocs in NY, age 20-40: %d\\n\", len(ageRangeDocs))\n\tfor _, doc := range ageRangeDocs { fmt.Printf(\"  %+v\\n\", doc.Data) }\n}",
           "validation": "The output should correctly list documents matching the exact lookup (`New York`, `30`) and the range lookup (`New York`, `20-40`). The number of results should match the expected count based on inserted data."
         },
         "related": {
@@ -628,7 +1085,7 @@
         "id": "pattern:Streaming Documents",
         "description": "Iterating over all documents in the store efficiently using `DocumentStream`.",
         "example": {
-          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Insert some documents\n\tfor i := 0; i < 5; i++ {\n\t\ts.Insert(store.Document{\"item\": fmt.Sprintf(\"Item%d\", i)})\n\t}\n\n\t// Create and consume a stream\n\tstream := s.Stream(2) // Buffered stream\n\tdefer stream.Close() // Important to close the stream\n\n\tcount := 0\n\tfor {\n\t\tdoc, err := stream.Next()\n\t\tif err != nil {\n\t\t\tif err == store.ErrStreamClosed { break }\n\t\t\tlog.Fatalf(\"Stream error: %v\", err)\n\t\t}\n\t\tfmt.Printf(\"Streamed: %s\\n\", doc.Data[\"item\"])\n\t\tcount++\n\t}\n\tfmt.Printf(\"Total streamed documents: %d\\n\", count)\n}\n",
+          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Insert some documents\n\tfor i := 0; i < 5; i++ {\n\t\ts.Insert(store.Document{\"item\": fmt.Sprintf(\"Item%d\", i)})\n\t}\n\n\t// Create and consume a stream\n\tstream := s.Stream(2) // Buffered stream\n\tdefer stream.Close() // Important to close the stream\n\n\tcount := 0\n\tfor {\n\t\tdoc, err := stream.Next()\n\t\tif err != nil {\n\t\t\tif err == store.ErrStreamClosed { break }\n\t\t\tlog.Fatalf(\"Stream error: %v\", err)\n\t\t}\n\t\tfmt.Printf(\"Streamed: %s\\n\", doc.Data[\"item\"])\n\t\tcount++\n\t}\n\tfmt.Printf(\"Total streamed documents: %d\\n\", count)\n}",
           "validation": "The program should print 'Streamed: ItemX' for each item inserted, and the final count should match the number of inserted documents. `ErrStreamClosed` should be returned at the end, not other errors."
         },
         "related": {
@@ -647,7 +1104,7 @@
         "id": "pattern:Concurrent Update Pattern",
         "description": "Demonstrates how `go-store` handles multiple goroutines updating the same document safely using its optimistic concurrency control.",
         "example": {
-          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"sync\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tid, _ := s.Insert(store.Document{\"counter\": 0})\n\n\tvar wg sync.WaitGroup\n\tconst numUpdates = 100\n\n\tfor i := 0; i < numUpdates; i++ {\n\t\twg.Add(1)\n\t\tgo func(val int) {\n\t\t\tdefer wg.Done()\n\t\t\t// Each goroutine tries to update the counter to its iteration value\n\t\t\terr := s.Update(id, store.Document{\"counter\": val})\n\t\t\tif err != nil {\n\t\t\t\t// ErrDocumentNotFound is expected if another goroutine deletes it\n\t\t\t\tfmt.Printf(\"Update %d failed: %v\\n\", val, err)\n\t\t\t}\n\t\t}(i + 1)\n\t}\n\twg.Wait()\n\n\tfinalDoc, err := s.Get(id)\n\tif err != nil { log.Fatalf(\"Failed to get final doc: %v\", err) }\n\tfmt.Printf(\"Final Counter: %v, Final Version: %d\\n\", finalDoc.Data[\"counter\"], finalDoc.Version)\n\n\t// The final counter might be any of the update values, but the version\n\t// will be numUpdates + 1 (initial insert + all updates).\n\tif finalDoc.Version != uint64(numUpdates+1) {\n\t\tlog.Printf(\"WARNING: Expected version %d, got %d. This indicates a potential test scenario issue, not a bug.\", numUpdates+1, finalDoc.Version)\n\t}\n}\n",
+          "code": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"sync\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tid, _ := s.Insert(store.Document{\"counter\": 0})\n\n\tvar wg sync.WaitGroup\n\tconst numUpdates = 100\n\n\tfor i := 0; i < numUpdates; i++ {\n\t\twg.Add(1)\n\t\tgo func(val int) {\n\t\t\tdefer wg.Done()\n\t\t\t// Each goroutine tries to update the counter to its iteration value\n\t\t\terr := s.Update(id, store.Document{\"counter\": val})\n\t\t\tif err != nil {\n\t\t\t\t// ErrDocumentNotFound is expected if another goroutine deletes it\n\t\t\t\tfmt.Printf(\"Update %d failed: %v\\n\", val, err)\n\t\t\t}\n\t\t}(i + 1)\n\t}\n\twg.Wait()\n\n\tfinalDoc, err := s.Get(id)\n\tif err != nil { log.Fatalf(\"Failed to get final doc: %v\", err) }\n\tfmt.Printf(\"Final Counter: %v, Final Version: %d\\n\", finalDoc.Data[\"counter\"], finalDoc.Version)\n\n\t// The final counter might be any of the update values, but the version\n\t// will be numUpdates + 1 (initial insert + all updates).\n\tif finalDoc.Version != uint64(numUpdates+1) {\n\t\tlog.Printf(\"WARNING: Expected version %d, got %d. This indicates a potential test scenario issue, not a bug.\", numUpdates+1, finalDoc.Version)\n\t}\n}",
           "validation": "The `Final Version` printed should be `101` (1 initial insert + 100 updates), demonstrating that all update attempts were processed, even if their `counter` values were overwritten. The `Final Counter` will be the value from the last successful update."
         },
         "related": {
@@ -672,12 +1129,12 @@
         "scenarios": [
           {
             "trigger": "Attempting to retrieve a document with an ID that has never been inserted or has been successfully deleted.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\t_, err := s.Get(\"non-existent-id\")\n\tif err == store.ErrDocumentNotFound {\n\t\tfmt.Println(\"Successfully caught ErrDocumentNotFound for non-existent ID.\")\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\t_, err := s.Get(\"non-existent-id\")\n\tif err == store.ErrDocumentNotFound {\n\t\tfmt.Println(\"Successfully caught ErrDocumentNotFound for non-existent ID.\")\n\t}\n}",
             "reason": "The provided `docID` does not correspond to any active document in the store's internal map."
           },
           {
             "trigger": "Attempting to update or delete a document that has already been deleted (possibly by another concurrent operation).",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"sync\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\tid, _ := s.Insert(store.Document{\"foo\": \"bar\"})\n\n\tvar wg sync.WaitGroup\n\twg.Add(2)\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t// This goroutine deletes the document\n\t\terr := s.Delete(id)\n\t\tif err != nil && err != store.ErrDocumentNotFound { log.Println(err) }\n\t\tfmt.Println(\"Deleter finished.\")\n\t}()\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t_ = s.Update(id, store.Document{\"foo\": \"baz\"})\n\t\tif err := s.Update(id, store.Document{\"foo\": \"baz\"}); err == store.ErrDocumentNotFound {\n\t\t\tfmt.Println(\"Updater caught ErrDocumentNotFound (document was deleted by other goroutine).\")\n\t\t}\n\t}()\n\twg.Wait()\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"sync\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\tid, _ := s.Insert(store.Document{\"foo\": \"bar\"})\n\n\tvar wg sync.WaitGroup\n\twg.Add(2)\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t// This goroutine deletes the document\n\t\terr := s.Delete(id)\n\t\tif err != nil && err != store.ErrDocumentNotFound { log.Println(err) }\n\t\tfmt.Println(\"Deleter finished.\")\n\t}()\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t_ = s.Update(id, store.Document{\"foo\": \"baz\"})\n\t\tif err := s.Update(id, store.Document{\"foo\": \"baz\"}); err == store.ErrDocumentNotFound {\n\t\t\tfmt.Println(\"Updater caught ErrDocumentNotFound (document was deleted by other goroutine).\")\n\t\t}\n\t}()\n\twg.Wait()\n}",
             "reason": "The document's handle or associated snapshot was removed from the store before the operation could complete."
           }
         ],
@@ -688,7 +1145,7 @@
         "propagationBehavior": "Bubbles up to the caller of the `Store` method. It is not caught internally by the store.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:Get",
             "method:Update",
@@ -708,7 +1165,7 @@
         "scenarios": [
           {
             "trigger": "A `Get` or `Update` operation races with a `Delete` operation. The document's `DocumentHandle` might still be in the `Store.documents` map, but its internal `current` snapshot pointer has been set to `nil` by the `Delete` operation.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"sync\"\n\t\"time\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tid, _ := s.Insert(store.Document{\"key\": \"value\"})\n\n\tvar wg sync.WaitGroup\n\twg.Add(2)\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\ttime.Sleep(1 * time.Millisecond) // Give updater a chance to start\n\t\t_ = s.Delete(id)\n\t\tfmt.Println(\"Deleter finished.\")\n\t}()\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t_, err := s.Get(id)\n\t\tif err == store.ErrDocumentDeleted {\n\t\t\tfmt.Println(\"Getter caught ErrDocumentDeleted: document was concurrently deleted.\")\n\t\t} else if err != nil {\n\t\t\tfmt.Printf(\"Getter caught unexpected error: %v\\n\", err)\n\t\t}\n\t}()\n\twg.Wait()\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"sync\"\n\t\"time\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tid, _ := s.Insert(store.Document{\"key\": \"value\"})\n\n\tvar wg sync.WaitGroup\n\twg.Add(2)\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\ttime.Sleep(1 * time.Millisecond) // Give updater a chance to start\n\t\t_ = s.Delete(id)\n\t\tfmt.Println(\"Deleter finished.\")\n\t}()\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t_, err := s.Get(id)\n\t\tif err == store.ErrDocumentDeleted {\n\t\t\tfmt.Println(\"Getter caught ErrDocumentDeleted: document was concurrently deleted.\")\n\t\t} else if err != nil {\n\t\t\tfmt.Printf(\"Getter caught unexpected error: %v\\n\", err)\n\t\t}\n\t}()\n\twg.Wait()\n}",
             "reason": "The underlying `DocumentSnapshot` has been marked for deletion (its pointer set to nil), even if the `DocumentHandle` itself hasn't been completely removed from the store's map yet. This indicates the document is no longer active."
           }
         ],
@@ -719,7 +1176,7 @@
         "propagationBehavior": "Bubbles up to the caller of the `Store` method. It is not caught internally by the store.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:Get",
             "method:Update"
@@ -736,7 +1193,7 @@
         "scenarios": [
           {
             "trigger": "Attempting to create an index with a name that is already assigned to another index in the store.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t_ = s.CreateIndex(\"my_index\", []string{\"field1\"})\n\n\terr := s.CreateIndex(\"my_index\", []string{\"field2\"})\n\tif err == store.ErrIndexExists {\n\t\tfmt.Println(\"Successfully caught ErrIndexExists.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t_ = s.CreateIndex(\"my_index\", []string{\"field1\"})\n\n\terr := s.CreateIndex(\"my_index\", []string{\"field2\"})\n\tif err == store.ErrIndexExists {\n\t\tfmt.Println(\"Successfully caught ErrIndexExists.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}",
             "reason": "The `Store` maintains a map of indexes by their unique names. An attempt was made to add a new entry with a key that already exists."
           }
         ],
@@ -747,7 +1204,7 @@
         "propagationBehavior": "Bubbles up to the caller of `CreateIndex`.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:CreateIndex"
           ],
@@ -763,7 +1220,7 @@
         "scenarios": [
           {
             "trigger": "Providing an empty slice of field names when creating a new index.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\terr := s.CreateIndex(\"invalid_index\", []string{})\n\tif err == store.ErrEmptyIndex {\n\t\tfmt.Println(\"Successfully caught ErrEmptyIndex.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\terr := s.CreateIndex(\"invalid_index\", []string{})\n\tif err == store.ErrEmptyIndex {\n\t\tfmt.Println(\"Successfully caught ErrEmptyIndex.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}",
             "reason": "An index requires at least one field to be defined for its keys. An empty `fields` slice is logically invalid for a B-tree index."
           }
         ],
@@ -774,7 +1231,7 @@
         "propagationBehavior": "Bubbles up to the caller of `CreateIndex`.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:CreateIndex"
           ],
@@ -790,7 +1247,7 @@
         "scenarios": [
           {
             "trigger": "Attempting to query or drop an index that has not been created or has already been dropped.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Try to lookup using a non-existent index\n\t_, err := s.Lookup(\"non_existent_index\", []any{\"value\"})\n\tif err == store.ErrIndexNotFound {\n\t\tfmt.Println(\"Successfully caught ErrIndexNotFound for lookup.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n\n\t// Try to drop a non-existent index\n\terr = s.DropIndex(\"another_non_existent_index\")\n\tif err == store.ErrIndexNotFound {\n\t\tfmt.Println(\"Successfully caught ErrIndexNotFound for drop.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t// Try to lookup using a non-existent index\n\t_, err := s.Lookup(\"non_existent_index\", []any{\"value\"})\n\tif err == store.ErrIndexNotFound {\n\t\tfmt.Println(\"Successfully caught ErrIndexNotFound for lookup.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n\n\t// Try to drop a non-existent index\n\terr = s.DropIndex(\"another_non_existent_index\")\n\tif err == store.ErrIndexNotFound {\n\t\tfmt.Println(\"Successfully caught ErrIndexNotFound for drop.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}",
             "reason": "The `indexName` provided does not match any index currently managed by the `Store`."
           }
         ],
@@ -801,7 +1258,7 @@
         "propagationBehavior": "Bubbles up to the caller of the respective `Store` method.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:DropIndex",
             "method:Lookup",
@@ -819,12 +1276,12 @@
         "scenarios": [
           {
             "trigger": "Attempting to call `DocumentStream.Next()` after the stream has delivered all documents.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\t_, _ = s.Insert(store.Document{\"test\": 1})\n\n\tstream := s.Stream(0)\n\t_, _ = stream.Next() // Consume the only document\n\n\t_, err := stream.Next() // Call again when exhausted\n\tif err == store.ErrStreamClosed {\n\t\tfmt.Println(\"Caught ErrStreamClosed after stream exhausted.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\t_, _ = s.Insert(store.Document{\"test\": 1})\n\n\tstream := s.Stream(0)\n\t_, _ = stream.Next() // Consume the only document\n\n\t_, err := stream.Next() // Call again when exhausted\n\tif err == store.ErrStreamClosed {\n\t\tfmt.Println(\"Caught ErrStreamClosed after stream exhausted.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}",
             "reason": "The internal channel feeding the stream has been closed, indicating no more `DocumentResult` values will be sent."
           },
           {
             "trigger": "Attempting to call `DocumentStream.Next()` after `DocumentStream.Close()` has been explicitly called.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"time\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tstream := s.Stream(0) // Unbuffered stream to easily block Next()\n\n\tgo func() {\n\t\t// In a real scenario, this goroutine might be waiting for documents\n\t\t_, err := stream.Next()\n\t\tif err == store.ErrStreamClosed {\n\t\t\tfmt.Println(\"Goroutine caught ErrStreamClosed due to explicit stream close.\")\n\t\t} else {\n\t\t\tfmt.Printf(\"Goroutine caught unexpected error: %v\\n\", err)\n\t\t}\n\t}()\n\n\ttime.Sleep(10 * time.Millisecond) // Allow goroutine to reach Next()\n\tstream.Close() // Explicitly close the stream\n\n\ttime.Sleep(10 * time.Millisecond) // Allow goroutine to finish\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"time\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\tstream := s.Stream(0) // Unbuffered stream to easily block Next()\n\n\tgo func() {\n\t\t// In a real scenario, this goroutine might be waiting for documents\n\t\t_, err := stream.Next()\n\t\tif err == store.ErrStreamClosed {\n\t\t\tfmt.Println(\"Goroutine caught ErrStreamClosed due to explicit stream close.\")\n\t\t} else {\n\t\t\tfmt.Printf(\"Goroutine caught unexpected error: %v\\n\", err)\n\t\t}\n\t}()\n\n\ttime.Sleep(10 * time.Millisecond) // Allow goroutine to reach Next()\n\tstream.Close() // Explicitly close the stream\n\n\ttime.Sleep(10 * time.Millisecond) // Allow goroutine to finish\n}",
             "reason": "The stream's `Close()` method explicitly signals termination."
           }
         ],
@@ -835,7 +1292,7 @@
         "propagationBehavior": "Bubbles up to the caller of `DocumentStream.Next()`.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:DocumentStream.Next"
           ],
@@ -851,7 +1308,7 @@
         "scenarios": [
           {
             "trigger": "Attempting to perform any operation on a `Store` instance after its `Close()` method has been called.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\ts.Close() // Close the store immediately\n\n\t_, err := s.Insert(store.Document{\"foo\": \"bar\"})\n\tif err == store.ErrStoreClosed {\n\t\tfmt.Println(\"Successfully caught ErrStoreClosed.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\ts.Close() // Close the store immediately\n\n\t_, err := s.Insert(store.Document{\"foo\": \"bar\"})\n\tif err == store.ErrStoreClosed {\n\t\tfmt.Println(\"Successfully caught ErrStoreClosed.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}",
             "reason": "The store's internal `closed` atomic flag has been set to `true`, indicating it's no longer operational."
           }
         ],
@@ -862,19 +1319,17 @@
         "propagationBehavior": "Bubbles up to the caller of the `Store` method.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
-            "method:NewStore",
             "method:Insert",
+            "method:Get",
             "method:Update",
             "method:Delete",
-            "method:Get",
             "method:Stream",
             "method:CreateIndex",
             "method:DropIndex",
             "method:Lookup",
-            "method:LookupRange",
-            "method:Store.Close"
+            "method:LookupRange"
           ],
           "patterns": [],
           "errors": []
@@ -888,7 +1343,7 @@
         "scenarios": [
           {
             "trigger": "Passing `nil` as the `doc` parameter to `Insert` or `Update`.",
-            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t_, err := s.Insert(nil) // Invalid\n\tif err == store.ErrInvalidDocument {\n\t\tfmt.Println(\"Caught ErrInvalidDocument for Insert with nil doc.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n\n\tid, _ := s.Insert(store.Document{\"a\":1})\n\terr = s.Update(id, nil) // Invalid\n\tif err == store.ErrInvalidDocument {\n\t\tfmt.Println(\"Caught ErrInvalidDocument for Update with nil doc.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}\n",
+            "example": "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\tstore \"github.com/asaidimu/go-store/v3\"\n)\n\nfunc main() {\n\ts := store.NewStore()\n\tdefer s.Close()\n\n\t_, err := s.Insert(nil) // Invalid\n\tif err == store.ErrInvalidDocument {\n\t\tfmt.Println(\"Caught ErrInvalidDocument for Insert with nil doc.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n\n\tid, _ := s.Insert(store.Document{\"a\":1})\n\terr = s.Update(id, nil) // Invalid\n\tif err == store.ErrInvalidDocument {\n\t\tfmt.Println(\"Caught ErrInvalidDocument for Update with nil doc.\")\n\t} else if err != nil {\n\t\tlog.Fatalf(\"Unexpected error: %v\", err)\n\t}\n}",
             "reason": "The store expects valid document data (a `map[string]any`) for insertion and update operations to ensure data integrity."
           }
         ],
@@ -899,7 +1354,7 @@
         "propagationBehavior": "Bubbles up to the caller of `Insert` or `Update`.",
         "related": {
           "interfaces": [],
-          "interface": null,
+          "interface": [],
           "methods": [
             "method:Insert",
             "method:Update"
