@@ -636,6 +636,122 @@ func (s *Store) Stream(bufferSize int) *DocumentStream {
 	return ds
 }
 
+// Clone creates a deep copy of the store with all documents and indexes.
+// The cloned store is completely independent - changes to one store will not affect the other.
+// Returns an error if the store is closed.
+func (s *Store) Clone() (*Store, error) {
+	if s.closed.Load() {
+		return nil, ErrStoreClosed
+	}
+
+	// Lock the source store for reading during cloning
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Create new store instance
+	newStore := NewStore()
+
+	// Set the version counter to match the source
+	atomic.StoreUint64(&newStore.version, atomic.LoadUint64(&s.version))
+
+	// Clone all valid documents
+	documents := s.collection.GetAllValid()
+	for _, doc := range documents {
+		// Insert document into new store's collection
+		index := newStore.collection.Insert(doc.id, copyDocument(doc.data), doc.version)
+
+		// Create handle for the new store
+		handle := &DocumentHandle{
+			id:    doc.id,
+			index: index,
+		}
+
+		// Create handle entry (indexes will be populated when we recreate indexes)
+		entry := HandleEntry{
+			handle:  handle,
+			indexes: make([]string, 0),
+		}
+
+		newStore.handles[doc.id] = entry
+	}
+
+	// Recreate all indexes with the same configuration
+	for indexName, sourceIndex := range s.indexes {
+		// Create the index (this will automatically populate it with existing documents)
+		err := newStore.CreateIndex(indexName, sourceIndex.fields)
+		if err != nil {
+			// This shouldn't happen since we're creating with unique names,
+			// but handle it gracefully
+			return nil, fmt.Errorf("failed to recreate index %s: %w", indexName, err)
+		}
+	}
+
+	return newStore, nil
+}
+
+// CloneWithCallback creates a deep copy of the store with an optional callback
+// that gets called for each document during cloning. This allows for selective
+// cloning or document transformation during the clone operation.
+// The callback receives the document and should return true to include it in the clone.
+func (s *Store) CloneWithCallback(callback func(*DocumentResult) bool) (*Store, error) {
+	if s.closed.Load() {
+		return nil, ErrStoreClosed
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Create new store instance
+	newStore := NewStore()
+
+	// Clone documents with callback filtering
+	documents := s.collection.GetAllValid()
+	for _, doc := range documents {
+		docResult := &DocumentResult{
+			ID:      doc.id,
+			Data:    copyDocument(doc.data),
+			Version: doc.version,
+		}
+
+		// Apply callback filter
+		if callback != nil && !callback(docResult) {
+			continue // Skip this document
+		}
+
+		// Insert document into new store's collection
+		index := newStore.collection.Insert(doc.id, docResult.Data, doc.version)
+
+		// Create handle for the new store
+		handle := &DocumentHandle{
+			id:    doc.id,
+			index: index,
+		}
+
+		// Create handle entry
+		entry := HandleEntry{
+			handle:  handle,
+			indexes: make([]string, 0),
+		}
+
+		newStore.handles[doc.id] = entry
+	}
+
+	// Recreate all indexes with the same configuration
+	for indexName, sourceIndex := range s.indexes {
+		err := newStore.CreateIndex(indexName, sourceIndex.fields)
+		if err != nil {
+			return nil, fmt.Errorf("failed to recreate index %s: %w", indexName, err)
+		}
+	}
+
+	// Set version counter based on what was actually cloned
+	if len(newStore.handles) > 0 {
+		atomic.StoreUint64(&newStore.version, atomic.LoadUint64(&s.version))
+	}
+
+	return newStore, nil
+}
+
 // streamDocuments runs the actual streaming logic in a goroutine.
 func (s *Store) streamDocuments(ds *DocumentStream, documents []*Document) {
 	defer close(ds.results)
