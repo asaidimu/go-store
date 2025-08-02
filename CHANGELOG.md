@@ -1,3 +1,10 @@
+# [3.3.0](https://github.com/asaidimu/go-store/compare/v3.2.0...v3.3.0) (2025-08-02)
+
+
+### Features
+
+* **store:** add store cloning capabilities ([f84923d](https://github.com/asaidimu/go-store/commit/f84923de6b4000b845bd296f16b96d74f0e80c73))
+
 # [3.2.0](https://github.com/asaidimu/go-store/compare/v3.1.0...v3.2.0) (2025-07-19)
 
 
